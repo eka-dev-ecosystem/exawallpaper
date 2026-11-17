@@ -1,0 +1,115 @@
+name: Release Live Wallpaper
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (win-x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore LiveWallpaper.csproj
+
+      - name: Publish Self-Contained Win-x64
+        run: >
+          dotnet publish LiveWallpaper.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o ./publish
+
+      - name: Package Release ZIP
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.version }}" }
+          $zipName = "LiveWallpaper-$tag-win-x64.zip"
+          Copy-Item -Path "README.md", "LICENSE" -Destination "./publish" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "./publish/*" -DestinationPath "./$zipName" -Force
+          mkdir artifacts
+          Move-Item -Path "./$zipName" -Destination "./artifacts/"
+          Copy-Item -Path "./publish/LiveWallpaper.exe" -Destination "./artifacts/"
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: ./artifacts/*
+
+  build-macos:
+    name: Build macOS (arm64)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and Package macOS App
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.version }}"
+          chmod +x ./scripts/build-macos.sh
+          ./scripts/build-macos.sh "$TAG"
+
+      - name: Prepare macOS Artifacts
+        run: |
+          mkdir -p artifacts
+          cp dist/macos/*.zip artifacts/
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: ./artifacts/*
+
+  release:
+    name: Create GitHub Release
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-files
+
+      - name: Prepare Release Assets & Checksums
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.version }}"
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          
+          mkdir -p ./dist-release
+          find ./release-files -type f -exec cp {} ./dist-release/ \;
+          
+          cd ./dist-release
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist-release/*
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Live Wallpaper ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true

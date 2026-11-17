@@ -1,0 +1,41 @@
+name: CI Build & Validation
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows .NET 8 (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore LiveWallpaper.csproj
+
+      - name: Build Windows Executable
+        run: dotnet build LiveWallpaper.csproj -c Release
+
+  build-macos:
+    name: Build macOS Swift (macos-latest)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Swift Package
+        working-directory: macos
+        run: swift build -c release

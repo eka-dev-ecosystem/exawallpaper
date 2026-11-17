@@ -1,0 +1,19 @@
+<Window x:Class="LiveWallpaper.Views.WallpaperWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Live Wallpaper Canvas"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="Black"
+        Left="0" Top="0" Width="1920" Height="1080">
+    <Grid Background="Black">
+        <MediaElement x:Name="Player"
+                      LoadedBehavior="Manual"
+                      UnloadedBehavior="Stop"
+                      ScrubbingEnabled="True"
+                      Stretch="UniformToFill"
+                      MediaEnded="Player_MediaEnded"
+                      MediaFailed="Player_MediaFailed" />
+    </Grid>
+</Window>

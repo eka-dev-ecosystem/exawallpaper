@@ -1,0 +1,179 @@
+<Window x:Class="LiveWallpaper.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Live Wallpaper Settings"
+        Height="540" Width="480"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#18181B"
+        Foreground="#F4F4F5"
+        FontFamily="Segoe UI">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Live Wallpaper" FontSize="20" FontWeight="Bold" Foreground="#FFFFFF" />
+            <TextBlock Text="Ultra-lightweight, hardware-accelerated video wallpaper" FontSize="12" Foreground="#A1A1AA" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- Content Scroll -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="16">
+
+                <!-- Video Selection Section -->
+                <Border Background="#27272A" CornerRadius="8" Padding="12">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Video File" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="TxtVideoPath"
+                                     Grid.Column="0"
+                                     IsReadOnly="True"
+                                     Background="#18181B"
+                                     Foreground="#D4D4D8"
+                                     BorderBrush="#3F3F46"
+                                     Padding="8,6"
+                                     VerticalContentAlignment="Center"
+                                     Text="No video selected" />
+                            <Button x:Name="BtnBrowse"
+                                    Grid.Column="1"
+                                    Content="Browse..."
+                                    Margin="8,0,0,0"
+                                    Padding="14,6"
+                                    Background="#3B82F6"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    FontWeight="SemiBold"
+                                    Click="BtnBrowse_Click" />
+                        </Grid>
+                        <TextBlock Text="Supported formats: MP4, MOV, WebM" FontSize="11" Foreground="#71717A" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Audio Settings -->
+                <Border Background="#27272A" CornerRadius="8" Padding="12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Audio Settings" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                        <CheckBox x:Name="ChkMute"
+                                  Content="Mute audio (recommended for live wallpaper)"
+                                  Foreground="#D4D4D8"
+                                  IsChecked="True"
+                                  Checked="ChkMute_Changed"
+                                  Unchecked="ChkMute_Changed" />
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Volume" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <Slider x:Name="SldVolume"
+                                    Grid.Column="1"
+                                    Minimum="0" Maximum="100" Value="50"
+                                    VerticalAlignment="Center"
+                                    ValueChanged="SldVolume_ValueChanged" />
+                            <TextBlock x:Name="TxtVolumeVal"
+                                       Grid.Column="2"
+                                       Text="50%"
+                                       Foreground="#A1A1AA"
+                                       Margin="12,0,0,0"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Performance & Auto-Pause -->
+                <Border Background="#27272A" CornerRadius="8" Padding="12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Performance &amp; Battery Saver" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                        <CheckBox x:Name="ChkPauseFullscreen"
+                                  Content="Auto-pause when game / full-screen app is active"
+                                  Foreground="#D4D4D8"
+                                  IsChecked="True" />
+                        <CheckBox x:Name="ChkPauseBattery"
+                                  Content="Auto-pause on battery / power saving mode"
+                                  Foreground="#D4D4D8"
+                                  IsChecked="True" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Display & Scaling -->
+                <Border Background="#27272A" CornerRadius="8" Padding="12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Display &amp; Scaling" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Scaling Mode" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <ComboBox x:Name="CmbStretch"
+                                      Grid.Column="1"
+                                      Background="#18181B"
+                                      Foreground="Black"
+                                      Padding="6,4">
+                                <ComboBoxItem Content="Aspect Fill (UniformToFill)" Tag="UniformToFill" IsSelected="True" />
+                                <ComboBoxItem Content="Aspect Fit (Uniform)" Tag="Uniform" />
+                                <ComboBoxItem Content="Stretch (Fill)" Tag="Fill" />
+                            </ComboBox>
+                        </Grid>
+
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Monitors" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <ComboBox x:Name="CmbMonitors"
+                                      Grid.Column="1"
+                                      Background="#18181B"
+                                      Foreground="Black"
+                                      Padding="6,4">
+                                <ComboBoxItem Content="All Connected Displays" Tag="AllMonitors" IsSelected="True" />
+                                <ComboBoxItem Content="Primary Display Only" Tag="PrimaryOnly" />
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- System Options -->
+                <Border Background="#27272A" CornerRadius="8" Padding="12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="System Options" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                        <CheckBox x:Name="ChkRunAtStartup"
+                                  Content="Start automatically when Windows starts"
+                                  Foreground="#D4D4D8" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0" Spacing="8">
+            <Button x:Name="BtnCancel"
+                    Content="Cancel"
+                    Padding="16,8"
+                    Background="#27272A"
+                    Foreground="#D4D4D8"
+                    BorderThickness="0"
+                    Click="BtnCancel_Click" />
+            <Button x:Name="BtnSave"
+                    Content="Save &amp; Apply"
+                    Padding="16,8"
+                    Background="#2563EB"
+                    Foreground="White"
+                    FontWeight="SemiBold"
+                    BorderThickness="0"
+                    Click="BtnSave_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
