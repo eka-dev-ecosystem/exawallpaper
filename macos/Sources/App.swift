@@ -13,6 +13,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Enforce single instance: prevent duplicate menu bar icons
+        let currentPid = ProcessInfo.processInfo.processIdentifier
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.exa.exawallpaper"
+        let duplicateApps = NSWorkspace.shared.runningApplications.filter { app in
+            app.processIdentifier != currentPid &&
+            (app.bundleIdentifier == bundleId || app.localizedName == "ExaWallpaper")
+        }
+
+        if !duplicateApps.isEmpty {
+            print("[ExaWallpaper] Another instance is already running. Activating existing instance and exiting.")
+            duplicateApps.first?.activate(options: [.activateIgnoringOtherApps])
+            NSApp.terminate(nil)
+            return
+        }
+
         // Run as pure Menu Bar accessory app (no Dock icon)
         NSApp.setActivationPolicy(.accessory)
 

@@ -27,9 +27,19 @@ public partial class App : Application
     private ToolStripMenuItem? _playPauseMenuItem;
     private ToolStripMenuItem? _muteMenuItem;
 
+    private static System.Threading.Mutex? _singleInstanceMutex;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Enforce single-instance on Windows
+        _singleInstanceMutex = new System.Threading.Mutex(true, "ExaWallpaper_SingleInstance_Mutex", out bool isNewInstance);
+        if (!isNewInstance)
+        {
+            Shutdown();
+            return;
+        }
 
         _configService = new ConfigService();
         _config = _configService.Load();
