@@ -13,6 +13,7 @@ public final class VideoPlayerService {
     public init() {
         playerLayer.videoGravity = .resizeAspectFill
         playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        playerLayer.drawsAsynchronously = true
     }
 
     public func loadVideo(url: URL, isMuted: Bool, volume: Float, scalingMode: String) {
@@ -25,6 +26,10 @@ public final class VideoPlayerService {
         let playerItem = AVPlayerItem(asset: asset)
 
         let player = AVQueuePlayer()
+        player.preventsDisplaySleepDuringVideoPlayback = false
+        player.automaticallyWaitsToMinimizeStalling = false
+        player.actionAtItemEnd = .none
+
         self.playerLooper = AVPlayerLooper(player: player, templateItem: playerItem)
 
         self.queuePlayer = player
