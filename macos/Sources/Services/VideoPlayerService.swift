@@ -24,7 +24,7 @@ public final class VideoPlayerService {
         let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
 
-        let player = AVQueuePlayer(items: [playerItem])
+        let player = AVQueuePlayer()
         self.playerLooper = AVPlayerLooper(player: player, templateItem: playerItem)
 
         self.queuePlayer = player

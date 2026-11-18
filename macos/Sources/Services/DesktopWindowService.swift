@@ -1,9 +1,35 @@
 import AppKit
+import AVFoundation
 import Foundation
+
+final class PlayerHostingView: NSView {
+    let playerLayer: AVPlayerLayer
+
+    init(frame: NSRect, playerLayer: AVPlayerLayer) {
+        self.playerLayer = playerLayer
+        super.init(frame: frame)
+        self.wantsLayer = true
+        self.layer?.backgroundColor = NSColor.black.cgColor
+        self.layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        playerLayer.frame = bounds
+        CATransaction.commit()
+    }
+}
 
 public final class DesktopWindowService {
     private struct DisplayInstance {
         let window: NSWindow
+        let hostingView: PlayerHostingView
         let playerService: VideoPlayerService
     }
 
@@ -54,8 +80,15 @@ public final class DesktopWindowService {
         instances.forEach { $0.playerService.setScalingMode(mode) }
     }
 
+    private func resolveURL(from path: String) -> URL? {
+        if path.hasPrefix("file://") {
+            return URL(string: path)
+        }
+        return URL(fileURLWithPath: path)
+    }
+
     public func loadVideo(path: String) {
-        guard let url = URL(string: path) ?? URL(fileURLWithPath: path) as URL? else { return }
+        guard let url = resolveURL(from: path) else { return }
         instances.forEach { instance in
             instance.playerService.loadVideo(
                 url: url,
@@ -85,13 +118,14 @@ public final class DesktopWindowService {
             instances.append(instance)
 
             if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path) {
-                let url = URL(fileURLWithPath: path)
-                instance.playerService.loadVideo(
-                    url: url,
-                    isMuted: currentConfig.isMuted,
-                    volume: Float(currentConfig.volume),
-                    scalingMode: currentConfig.scalingMode
-                )
+                if let url = resolveURL(from: path) {
+                    instance.playerService.loadVideo(
+                        url: url,
+                        isMuted: currentConfig.isMuted,
+                        volume: Float(currentConfig.volume),
+                        scalingMode: currentConfig.scalingMode
+                    )
+                }
             }
         }
     }
@@ -118,17 +152,13 @@ public final class DesktopWindowService {
         // Stay on all virtual desktops / spaces and ignore window cycling
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
-        let contentView = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
-        contentView.wantsLayer = true
-        window.contentView = contentView
-
         let playerService = VideoPlayerService()
-        playerService.playerLayer.frame = contentView.bounds
-        contentView.layer?.addSublayer(playerService.playerLayer)
+        let hostingView = PlayerHostingView(frame: NSRect(origin: .zero, size: screen.frame.size), playerLayer: playerService.playerLayer)
+        window.contentView = hostingView
 
         window.orderFront(nil)
 
-        return DisplayInstance(window: window, playerService: playerService)
+        return DisplayInstance(window: window, hostingView: hostingView, playerService: playerService)
     }
 
     public func cleanup() {
