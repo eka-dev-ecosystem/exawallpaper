@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using ExaWallpaper.Models;
 using ExaWallpaper.Services;
 
