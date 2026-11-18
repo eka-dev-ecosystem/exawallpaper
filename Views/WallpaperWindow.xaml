@@ -5,14 +5,16 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
+        Focusable="False"
         Background="Black"
         Left="0" Top="0" Width="1920" Height="1080">
     <Grid Background="Black">
         <MediaElement x:Name="Player"
                       LoadedBehavior="Manual"
-                      UnloadedBehavior="Stop"
+                      UnloadedBehavior="Manual"
                       ScrubbingEnabled="True"
                       Stretch="UniformToFill"
+                      MediaOpened="Player_MediaOpened"
                       MediaEnded="Player_MediaEnded"
                       MediaFailed="Player_MediaFailed" />
     </Grid>

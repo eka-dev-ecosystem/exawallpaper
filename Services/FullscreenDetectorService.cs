@@ -52,7 +52,15 @@ public class FullscreenDetectorService
             return;
         }
 
-        // Filter out Windows Taskbar and Start Menu
+        // Ignore windows belonging to our own application
+        NativeMethods.GetWindowThreadProcessId(fg, out uint fgPid);
+        if (fgPid == Environment.ProcessId)
+        {
+            UpdateState(false);
+            return;
+        }
+
+        // Filter out Windows Taskbar, Start Menu, and Desktop view windows
         var className = new StringBuilder(256);
         NativeMethods.GetClassName(fg, className, className.Capacity);
         string name = className.ToString();
@@ -61,6 +69,8 @@ public class FullscreenDetectorService
             name == "Shell_SecondaryTrayWnd" ||
             name == "WorkerW" ||
             name == "Progman" ||
+            name == "SHELLDLL_DefView" ||
+            name == "SysListView32" ||
             name == "Windows.UI.Core.CoreWindow") // Start menu
         {
             UpdateState(false);

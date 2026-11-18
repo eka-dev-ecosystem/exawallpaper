@@ -3,6 +3,8 @@ using System.Drawing;
 using System.IO;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Interop;
+using System.Windows.Media;
 using ExaWallpaper.Models;
 using ExaWallpaper.Services;
 using ExaWallpaper.Views;
@@ -54,15 +56,42 @@ public partial class App : Application
             args.Handled = true;
         };
 
+        Log("App OnStartup started.");
+
+        try
+        {
+            IntPtr hDesk = NativeMethods.OpenDesktop("Default", 0, false, 0x01FF);
+            if (hDesk != IntPtr.Zero)
+            {
+                bool setDesk = NativeMethods.SetThreadDesktop(hDesk);
+                Log($"SetThreadDesktop(Default) returned: {setDesk}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"SetThreadDesktop exception: {ex.Message}");
+        }
+
         // Enforce single-instance on Windows
-        _singleInstanceMutex = new System.Threading.Mutex(true, "ExaWallpaper_SingleInstance_Mutex", out bool isNewInstance);
+        bool isNewInstance = false;
+        try
+        {
+            _singleInstanceMutex = new System.Threading.Mutex(true, "ExaWallpaper_SingleInstance_Mutex", out isNewInstance);
+        }
+        catch (AbandonedMutexException)
+        {
+            Log("Mutex was abandoned by previous instance; acquiring ownership.");
+            isNewInstance = true;
+        }
+        catch (Exception ex)
+        {
+            Log($"Mutex acquisition error: {ex.Message}; proceeding as new instance.");
+            isNewInstance = true;
+        }
+
         if (!isNewInstance)
         {
-            System.Windows.MessageBox.Show(
-                "ExaWallpaper is already running in the background.\nCheck your system tray (bottom-right icons near the clock) or click the tray icon to open Settings.",
-                "ExaWallpaper",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            Log("Another instance of ExaWallpaper is already running. Exiting silently.");
             Shutdown();
             return;
         }
@@ -96,11 +125,24 @@ public partial class App : Application
         }
     }
 
+    private static void Log(string message)
+    {
+        try
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string logFolder = Path.Combine(appData, "ExaWallpaper");
+            Directory.CreateDirectory(logFolder);
+            string logFile = Path.Combine(logFolder, "debug.log");
+            File.AppendAllText(logFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}: [App] {message}\n");
+        }
+        catch { }
+    }
+
     private void InitializeWallpaperWindow()
     {
+        Log($"InitializeWallpaperWindow: VideoPath = '{_config.VideoPath}'");
         _wallpaperWindow = new WallpaperWindow();
         _wallpaperWindow.Show();
-
         _windowService.AttachToDesktop(_wallpaperWindow, _config);
 
         if (!string.IsNullOrEmpty(_config.VideoPath) && File.Exists(_config.VideoPath))
@@ -176,6 +218,7 @@ public partial class App : Application
     {
         if (_wallpaperWindow == null) return;
 
+        Log($"EvaluatePlayback: ShouldBePlaying = {_state.ShouldBePlaying}, IsPausedByFullscreen = {_state.IsPausedByFullscreen}, IsPausedByPower = {_state.IsPausedByPower}, IsPausedByUser = {_state.IsPausedByUser}");
         if (_state.ShouldBePlaying)
         {
             _wallpaperWindow.Play();
@@ -255,13 +298,34 @@ public partial class App : Application
         _fullscreenDetector.Stop();
         _powerMonitor.Dispose();
 
+        _windowService?.RestoreDesktop();
+
         if (_notifyIcon != null)
         {
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
         }
 
+        if (_singleInstanceMutex != null)
+        {
+            try { _singleInstanceMutex.ReleaseMutex(); } catch { }
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
+        }
+
         _wallpaperWindow?.Close();
         Shutdown();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _windowService?.RestoreDesktop();
+        if (_singleInstanceMutex != null)
+        {
+            try { _singleInstanceMutex.ReleaseMutex(); } catch { }
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
+        }
+        base.OnExit(e);
     }
 }

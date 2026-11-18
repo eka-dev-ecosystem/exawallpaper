@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ExaWallpaper</AssemblyName>
     <RootNamespace>ExaWallpaper</RootNamespace>
     <Version>1.0.0</Version>
