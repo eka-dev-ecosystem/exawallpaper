@@ -2,7 +2,7 @@
 
 > **Ultra-lightweight, 100% Native, Battery-Friendly Desktop Video Wallpaper Engine for macOS & Windows.**
 
-[![Build & Validation](https://github.com/exa31/exawallpaper/actions/workflows/ci.yml/badge.svg)](https://github.com/exa31/exawallpaper/actions/workflows/ci.yml)
+[![Build & Validation](https://github.com/eka-dev-ecosystem/exawallpaper/actions/workflows/ci.yml/badge.svg)](https://github.com/eka-dev-ecosystem/exawallpaper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 
