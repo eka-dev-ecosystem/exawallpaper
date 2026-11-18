@@ -23,13 +23,13 @@
 
         <!-- Content Scroll -->
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="16">
+            <StackPanel>
 
                 <!-- Video Selection Section -->
-                <Border Background="#27272A" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Video File" FontWeight="SemiBold" Foreground="#E4E4E7" />
-                        <Grid>
+                <Border Background="#27272A" CornerRadius="8" Padding="12" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="Video File" FontWeight="SemiBold" Foreground="#E4E4E7" Margin="0,0,0,8" />
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -59,13 +59,14 @@
                 </Border>
 
                 <!-- Audio Settings -->
-                <Border Background="#27272A" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Audio Settings" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                <Border Background="#27272A" CornerRadius="8" Padding="12" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="Audio Settings" FontWeight="SemiBold" Foreground="#E4E4E7" Margin="0,0,0,10" />
                         <CheckBox x:Name="ChkMute"
                                   Content="Mute audio (recommended for live wallpaper)"
                                   Foreground="#D4D4D8"
                                   IsChecked="True"
+                                  Margin="0,0,0,8"
                                   Checked="ChkMute_Changed"
                                   Unchecked="ChkMute_Changed" />
                         <Grid Margin="0,4,0,0">
@@ -91,13 +92,14 @@
                 </Border>
 
                 <!-- Performance & Auto-Pause -->
-                <Border Background="#27272A" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Performance &amp; Battery Saver" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                <Border Background="#27272A" CornerRadius="8" Padding="12" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="Performance &amp; Battery Saver" FontWeight="SemiBold" Foreground="#E4E4E7" Margin="0,0,0,10" />
                         <CheckBox x:Name="ChkPauseFullscreen"
                                   Content="Auto-pause when game / full-screen app is active"
                                   Foreground="#D4D4D8"
-                                  IsChecked="True" />
+                                  IsChecked="True"
+                                  Margin="0,0,0,8" />
                         <CheckBox x:Name="ChkPauseBattery"
                                   Content="Auto-pause on battery / power saving mode"
                                   Foreground="#D4D4D8"
@@ -106,10 +108,10 @@
                 </Border>
 
                 <!-- Display & Scaling -->
-                <Border Background="#27272A" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Display &amp; Scaling" FontWeight="SemiBold" Foreground="#E4E4E7" />
-                        <Grid>
+                <Border Background="#27272A" CornerRadius="8" Padding="12" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="Display &amp; Scaling" FontWeight="SemiBold" Foreground="#E4E4E7" Margin="0,0,0,10" />
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -126,7 +128,7 @@
                             </ComboBox>
                         </Grid>
 
-                        <Grid Margin="0,4,0,0">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -146,8 +148,8 @@
 
                 <!-- System Options -->
                 <Border Background="#27272A" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="System Options" FontWeight="SemiBold" Foreground="#E4E4E7" />
+                    <StackPanel>
+                        <TextBlock Text="System Options" FontWeight="SemiBold" Foreground="#E4E4E7" Margin="0,0,0,10" />
                         <CheckBox x:Name="ChkRunAtStartup"
                                   Content="Start automatically when Windows starts"
                                   Foreground="#D4D4D8" />
@@ -158,10 +160,11 @@
         </ScrollViewer>
 
         <!-- Footer Buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0" Spacing="8">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button x:Name="BtnCancel"
                     Content="Cancel"
                     Padding="16,8"
+                    Margin="0,0,8,0"
                     Background="#27272A"
                     Foreground="#D4D4D8"
                     BorderThickness="0"
