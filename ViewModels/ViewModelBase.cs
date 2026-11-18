@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace LiveWallpaper.ViewModels;
+namespace ExaWallpaper.ViewModels;
 
 public abstract class ViewModelBase : INotifyPropertyChanged
 {

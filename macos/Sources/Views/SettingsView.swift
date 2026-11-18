@@ -32,7 +32,7 @@ public struct SettingsView: View {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Live Wallpaper Settings")
+                    Text("ExaWallpaper Settings")
                         .font(.title2)
                         .fontWeight(.bold)
                     Text("Ultra-lightweight native video wallpaper")

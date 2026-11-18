@@ -27,7 +27,7 @@ public final class MenuBarView: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            if let image = NSImage(systemSymbolName: "play.tv", accessibilityDescription: "Live Wallpaper") {
+            if let image = NSImage(systemSymbolName: "play.tv", accessibilityDescription: "ExaWallpaper") {
                 image.isTemplate = true
                 button.image = image
             } else {
@@ -37,7 +37,7 @@ public final class MenuBarView: NSObject {
 
         let menu = NSMenu()
 
-        statusTitleItem = NSMenuItem(title: "Live Wallpaper", action: nil, keyEquivalent: "")
+        statusTitleItem = NSMenuItem(title: "ExaWallpaper", action: nil, keyEquivalent: "")
         statusTitleItem.isEnabled = false
         menu.addItem(statusTitleItem)
 
@@ -63,7 +63,7 @@ public final class MenuBarView: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Live Wallpaper", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit ExaWallpaper", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -127,7 +127,7 @@ public final class MenuBarView: NSObject {
 
         let hostingController = NSHostingController(rootView: settingsView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Live Wallpaper Settings"
+        window.title = "ExaWallpaper Settings"
         window.styleMask = [.titled, .closable]
         window.center()
         window.isReleasedWhenClosed = false

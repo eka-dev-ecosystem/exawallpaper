@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
 
-namespace LiveWallpaper.Services;
+namespace ExaWallpaper.Services;
 
 public static class StartupService
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "LiveWallpaper";
+    private const string AppName = "ExaWallpaper";
 
     public static bool IsStartupEnabled()
     {

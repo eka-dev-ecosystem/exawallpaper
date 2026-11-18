@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Input;
 
-namespace LiveWallpaper.ViewModels;
+namespace ExaWallpaper.ViewModels;
 
 public class RelayCommand : ICommand
 {

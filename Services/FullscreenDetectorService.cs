@@ -3,7 +3,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.Windows.Threading;
 
-namespace LiveWallpaper.Services;
+namespace ExaWallpaper.Services;
 
 public class FullscreenDetectorService
 {

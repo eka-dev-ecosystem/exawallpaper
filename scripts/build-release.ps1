@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds and packages Live Wallpaper into a self-contained Windows executable and ZIP release.
+    Builds and packages ExaWallpaper into a self-contained Windows executable and ZIP release.
 .PARAMETER Version
     The release version tag, defaults to "v1.0.0".
 .PARAMETER CreateGitHubRelease
@@ -22,11 +22,11 @@ if (Test-Path $dotnetDir) {
 
 $rootDir = Split-Path -Parent $PSScriptRoot
 $distDir = Join-Path $rootDir "dist"
-$publishDir = Join-Path $distDir "LiveWallpaper"
-$zipPath = Join-Path $distDir "LiveWallpaper-$Version-win-x64.zip"
+$publishDir = Join-Path $distDir "ExaWallpaper"
+$zipPath = Join-Path $distDir "ExaWallpaper-$Version-win-x64.zip"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " Building Live Wallpaper ($Version)..." -ForegroundColor Cyan
+Write-Host " Building ExaWallpaper ($Version)..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 if (Test-Path $distDir) {
@@ -35,7 +35,7 @@ if (Test-Path $distDir) {
 New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 
 Write-Host "--> Running dotnet publish..." -ForegroundColor Yellow
-dotnet publish "$rootDir\LiveWallpaper.csproj" `
+dotnet publish "$rootDir\ExaWallpaper.csproj" `
     -c Release `
     -r win-x64 `
     --self-contained true `
@@ -44,8 +44,8 @@ dotnet publish "$rootDir\LiveWallpaper.csproj" `
     -p:EnableCompressionInSingleFile=true `
     -o $publishDir
 
-if (-not (Test-Path "$publishDir\LiveWallpaper.exe")) {
-    Write-Error "Build failed: LiveWallpaper.exe was not created."
+if (-not (Test-Path "$publishDir\ExaWallpaper.exe")) {
+    Write-Error "Build failed: ExaWallpaper.exe was not created."
 }
 
 # Copy documentation
@@ -67,12 +67,12 @@ Write-Host " SHA256: $sha256" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 
 # Save checksum file
-Set-Content -Path "$distDir\LiveWallpaper-$Version-win-x64.zip.sha256" -Value "$sha256  LiveWallpaper-$Version-win-x64.zip"
+Set-Content -Path "$distDir\ExaWallpaper-$Version-win-x64.zip.sha256" -Value "$sha256  ExaWallpaper-$Version-win-x64.zip"
 
 if ($CreateGitHubRelease) {
     Write-Host "--> Creating GitHub Release via GitHub CLI..." -ForegroundColor Yellow
     gh release create $Version $zipPath `
-        --title "Live Wallpaper $Version" `
+        --title "ExaWallpaper $Version" `
         --generate-notes
     Write-Host "--> GitHub Release $Version created!" -ForegroundColor Green
 }

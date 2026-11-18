@@ -1,12 +1,12 @@
-# 🎬 Live Wallpaper
+# 🎬 ExaWallpaper
 
 > **Ultra-lightweight, 100% Native, Battery-Friendly Desktop Video Wallpaper Engine for macOS & Windows.**
 
-[![Build & Validation](https://github.com/exa31/live-walpaper/actions/workflows/ci.yml/badge.svg)](https://github.com/exa31/live-walpaper/actions/workflows/ci.yml)
+[![Build & Validation](https://github.com/exa31/exawallpaper/actions/workflows/ci.yml/badge.svg)](https://github.com/exa31/exawallpaper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 
-Live Wallpaper adalah aplikasi live video wallpaper desktop modern tanpa runtime berat (tanpa Electron, Chromium, atau WebView2). Berjalan murni secara native menggunakan API grafis sistem operasi:
+ExaWallpaper adalah aplikasi live video wallpaper desktop modern tanpa runtime berat (tanpa Electron, Chromium, atau WebView2). Berjalan murni secara native menggunakan API grafis sistem operasi:
 - **macOS**: Swift 5.9+ / AppKit, `AVFoundation` (`AVQueuePlayer` + `AVPlayerLooper`), akselerasi penuh VideoToolbox/Metal, dan desktop injection pada level `kCGDesktopWindowLevel`.
 - **Windows**: C# .NET 8 / Win32 API, injeksi jendela `WorkerW` tepat di belakang `SHELLDLL_DefView`, dan akselerasi hardware DirectX / Media Foundation.
 
@@ -56,7 +56,7 @@ Live Wallpaper adalah aplikasi live video wallpaper desktop modern tanpa runtime
 Struktur proyek dirancang bersih dan modular, memodelkan tata letak native dari `anime-walpaper`:
 
 ```
-live-walpaper/
+exawallpaper/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                          # Validasi build CI
@@ -81,7 +81,7 @@ live-walpaper/
 │   └── SettingsWindow.xaml.cs
 ├── App.xaml                                # Application host
 ├── App.xaml.cs                             # Tray icon controller & app lifecycle
-├── LiveWallpaper.csproj                    # Proyek .NET 8 WPF
+├── ExaWallpaper.csproj                    # Proyek .NET 8 WPF
 │
 ├── macos/                                  # Modul Native macOS (Swift)
 │   ├── Package.swift                       # Swift Package Manager manifest
@@ -120,8 +120,8 @@ live-walpaper/
    ./scripts/build-macos.sh v1.0.0
    ```
    Hasil build akan tersedia di folder `dist/macos/`:
-   - `Live Wallpaper.app` (Application Bundle siap pakai)
-   - `LiveWallpaper-v1.0.0-macos-arm64.zip` (Distributable zip)
+   - `ExaWallpaper.app` (Application Bundle siap pakai)
+   - `ExaWallpaper-v1.0.0-macos-arm64.zip` (Distributable zip)
 
 ### Windows (10 / 11 64-bit)
 **Kebutuhan:** .NET 8.0 SDK.
@@ -143,15 +143,15 @@ live-walpaper/
      -p:EnableCompressionInSingleFile=true `
      -o ./publish
    ```
-   Hasil publish berupa satu file `LiveWallpaper.exe` yang langsung dapat dijalankan tanpa perlu instalasi runtime .NET tambahan.
+   Hasil publish berupa satu file `ExaWallpaper.exe` yang langsung dapat dijalankan tanpa perlu instalasi runtime .NET tambahan.
 
 ---
 
 ## ⚙️ Konfigurasi & Pengaturan
 
 Konfigurasi disimpan secara otomatis di:
-- **macOS**: `~/Library/Application Support/LiveWallpaper/config.json`
-- **Windows**: `%APPDATA%\LiveWallpaper\config.json`
+- **macOS**: `~/Library/Application Support/ExaWallpaper/config.json`
+- **Windows**: `%APPDATA%\ExaWallpaper\config.json`
 
 Contoh isi konfigurasi:
 ```json

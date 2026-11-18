@@ -3,7 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 
-namespace LiveWallpaper.Views;
+namespace ExaWallpaper.Views;
 
 public partial class WallpaperWindow : Window
 {

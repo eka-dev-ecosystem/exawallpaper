@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace LiveWallpaper.Services;
+namespace ExaWallpaper.Services;
 
 internal static class NativeMethods
 {

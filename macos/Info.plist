@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.exa.LiveWallpaper</string>
+    <string>com.exa.ExaWallpaper</string>
     <key>CFBundleName</key>
-    <string>Live Wallpaper</string>
+    <string>ExaWallpaper</string>
     <key>CFBundleDisplayName</key>
-    <string>Live Wallpaper</string>
+    <string>ExaWallpaper</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

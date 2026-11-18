@@ -3,12 +3,12 @@ using System.Drawing;
 using System.IO;
 using System.Windows;
 using System.Windows.Forms;
-using LiveWallpaper.Models;
-using LiveWallpaper.Services;
-using LiveWallpaper.Views;
+using ExaWallpaper.Models;
+using ExaWallpaper.Services;
+using ExaWallpaper.Views;
 using Application = System.Windows.Application;
 
-namespace LiveWallpaper;
+namespace ExaWallpaper;
 
 public partial class App : Application
 {
@@ -72,7 +72,7 @@ public partial class App : Application
         _notifyIcon = new NotifyIcon
         {
             Visible = true,
-            Text = "Live Wallpaper"
+            Text = "ExaWallpaper"
         };
 
         // Try load app icon

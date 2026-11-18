@@ -8,10 +8,12 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
-    <AssemblyName>LiveWallpaper</AssemblyName>
-    <RootNamespace>LiveWallpaper</RootNamespace>
+    <AssemblyName>ExaWallpaper</AssemblyName>
+    <RootNamespace>ExaWallpaper</RootNamespace>
     <Version>1.0.0</Version>
     <Authors>exa31</Authors>
+    <Company>Exa Ecosystem</Company>
+    <Product>ExaWallpaper</Product>
     <Description>Ultra-lightweight, 100% native hardware-accelerated video wallpaper engine for Windows 10/11</Description>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>

@@ -3,10 +3,10 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
-using LiveWallpaper.Models;
-using LiveWallpaper.Services;
+using ExaWallpaper.Models;
+using ExaWallpaper.Services;
 
-namespace LiveWallpaper.Views;
+namespace ExaWallpaper.Views;
 
 public partial class SettingsWindow : Window
 {

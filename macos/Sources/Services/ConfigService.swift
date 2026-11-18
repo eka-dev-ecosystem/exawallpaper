@@ -7,7 +7,7 @@ public final class ConfigService {
 
     public init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let folderURL = appSupport.appendingPathComponent("LiveWallpaper", isDirectory: true)
+        let folderURL = appSupport.appendingPathComponent("ExaWallpaper", isDirectory: true)
 
         try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
         self.fileURL = folderURL.appendingPathComponent("config.json")

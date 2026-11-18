@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using LiveWallpaper.Models;
+using ExaWallpaper.Models;
 
-namespace LiveWallpaper.Services;
+namespace ExaWallpaper.Services;
 
 public class ConfigService
 {
@@ -13,7 +13,7 @@ public class ConfigService
     public ConfigService()
     {
         string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        string folder = Path.Combine(appData, "LiveWallpaper");
+        string folder = Path.Combine(appData, "ExaWallpaper");
         Directory.CreateDirectory(folder);
         _configPath = Path.Combine(folder, "config.json");
     }

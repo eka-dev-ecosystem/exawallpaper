@@ -3,9 +3,9 @@ using System.Text;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
-using LiveWallpaper.Models;
+using ExaWallpaper.Models;
 
-namespace LiveWallpaper.Services;
+namespace ExaWallpaper.Services;
 
 public class WallpaperWindowService
 {

@@ -1,4 +1,4 @@
-name: Release Live Wallpaper
+name: Release ExaWallpaper
 
 on:
   push:
@@ -28,11 +28,11 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore LiveWallpaper.csproj
+        run: dotnet restore ExaWallpaper.csproj
 
       - name: Publish Self-Contained Win-x64
         run: >
-          dotnet publish LiveWallpaper.csproj -c Release -r win-x64 --self-contained true
+          dotnet publish ExaWallpaper.csproj -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
@@ -42,12 +42,12 @@ jobs:
         shell: pwsh
         run: |
           $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.version }}" }
-          $zipName = "LiveWallpaper-$tag-win-x64.zip"
+          $zipName = "ExaWallpaper-$tag-win-x64.zip"
           Copy-Item -Path "README.md", "LICENSE" -Destination "./publish" -ErrorAction SilentlyContinue
           Compress-Archive -Path "./publish/*" -DestinationPath "./$zipName" -Force
           mkdir artifacts
           Move-Item -Path "./$zipName" -Destination "./artifacts/"
-          Copy-Item -Path "./publish/LiveWallpaper.exe" -Destination "./artifacts/"
+          Copy-Item -Path "./publish/ExaWallpaper.exe" -Destination "./artifacts/"
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
@@ -109,7 +109,7 @@ jobs:
         with:
           files: ./dist-release/*
           tag_name: ${{ env.RELEASE_TAG }}
-          name: Live Wallpaper ${{ env.RELEASE_TAG }}
+          name: ExaWallpaper ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
           generate_release_notes: true

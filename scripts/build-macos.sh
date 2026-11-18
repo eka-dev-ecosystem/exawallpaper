@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MACOS_DIR="$ROOT_DIR/macos"
 DIST_DIR="$ROOT_DIR/dist/macos"
-APP_NAME="Live Wallpaper"
+APP_NAME="ExaWallpaper"
 BUNDLE_DIR="$DIST_DIR/$APP_NAME.app"
 RAW_VERSION="${1:-v1.0.0}"
 if [[ "$RAW_VERSION" == v* ]]; then
@@ -16,7 +16,7 @@ else
     CLEAN_VERSION="$RAW_VERSION"
 fi
 
-echo "🎬 Building Live Wallpaper for macOS ($TAG)..."
+echo "🎬 Building ExaWallpaper for macOS ($TAG)..."
 
 # 1. Compile Swift in Release mode
 cd "$MACOS_DIR"
@@ -28,13 +28,13 @@ mkdir -p "$BUNDLE_DIR/Contents/MacOS"
 mkdir -p "$BUNDLE_DIR/Contents/Resources"
 
 # 3. Copy executable
-cp "$MACOS_DIR/.build/release/LiveWallpaper" "$BUNDLE_DIR/Contents/MacOS/LiveWallpaper"
-chmod +x "$BUNDLE_DIR/Contents/MacOS/LiveWallpaper"
+cp "$MACOS_DIR/.build/release/ExaWallpaper" "$BUNDLE_DIR/Contents/MacOS/ExaWallpaper"
+chmod +x "$BUNDLE_DIR/Contents/MacOS/ExaWallpaper"
 
 # 4. Generate AppIcon.icns from Resources/app.png if available
 if [ -f "$ROOT_DIR/Resources/app.png" ]; then
     echo "🎨 Generating AppIcon.icns..."
-    ICONSET_DIR="/tmp/LiveWallpaper.iconset"
+    ICONSET_DIR="/tmp/ExaWallpaper.iconset"
     rm -rf "$ICONSET_DIR"
     mkdir -p "$ICONSET_DIR"
 
@@ -60,13 +60,13 @@ cat <<EOF > "$BUNDLE_DIR/Contents/Info.plist"
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>LiveWallpaper</string>
+    <string>ExaWallpaper</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.exa.livewallpaper</string>
+    <string>com.exa.exawallpaper</string>
     <key>CFBundleName</key>
-    <string>Live Wallpaper</string>
+    <string>ExaWallpaper</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -92,7 +92,7 @@ codesign --force --deep --sign - "$BUNDLE_DIR" > /dev/null 2>&1 || true
 echo "📦 Packaging ZIP archive..."
 mkdir -p "$DIST_DIR"
 cd "$DIST_DIR"
-ZIP_NAME="LiveWallpaper-$TAG-macos-arm64.zip"
+ZIP_NAME="ExaWallpaper-$TAG-macos-arm64.zip"
 rm -f "$ZIP_NAME"
 zip -r -q -y "$ZIP_NAME" "$APP_NAME.app"
 

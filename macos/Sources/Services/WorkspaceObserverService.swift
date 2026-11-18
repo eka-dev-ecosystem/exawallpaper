@@ -122,7 +122,7 @@ public final class WorkspaceObserverService {
             guard let alpha = info[kCGWindowAlpha as String] as? Double, alpha > 0.8 else { continue }
 
             // Skip desktop elements, dock, our own wallpaper app
-            if ownerName == "Dock" || ownerName == "Window Server" || ownerName == "LiveWallpaper" || ownerName == "Finder" {
+            if ownerName == "Dock" || ownerName == "Window Server" || ownerName == "ExaWallpaper" || ownerName == "Finder" {
                 continue
             }
 

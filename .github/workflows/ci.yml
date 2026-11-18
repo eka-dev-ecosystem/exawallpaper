@@ -24,10 +24,10 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore LiveWallpaper.csproj
+        run: dotnet restore ExaWallpaper.csproj
 
       - name: Build Windows Executable
-        run: dotnet build LiveWallpaper.csproj -c Release
+        run: dotnet build ExaWallpaper.csproj -c Release
 
   build-macos:
     name: Build macOS Swift (macos-latest)

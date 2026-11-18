@@ -1,4 +1,4 @@
-namespace LiveWallpaper.Models;
+namespace ExaWallpaper.Models;
 
 public class WallpaperState
 {

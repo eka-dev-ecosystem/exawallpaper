@@ -2,7 +2,7 @@ using System;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace LiveWallpaper.Services;
+namespace ExaWallpaper.Services;
 
 public class PowerMonitorService : IDisposable
 {
