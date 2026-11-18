@@ -45,6 +45,10 @@ public class WallpaperWindowService
             {
                 // The WorkerW window created for desktop background is next in Z-order
                 foundWorkerW = NativeMethods.FindWindowEx(IntPtr.Zero, hWnd, "WorkerW", null);
+                if (foundWorkerW != IntPtr.Zero)
+                {
+                    return false; // Found, stop enumerating
+                }
             }
             return true;
         }, IntPtr.Zero);
@@ -62,6 +66,10 @@ public class WallpaperWindowService
         if (targetWorkerW != IntPtr.Zero)
         {
             NativeMethods.SetParent(hWnd, targetWorkerW);
+
+            long style = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE).ToInt64();
+            style |= NativeMethods.WS_CHILD;
+            NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE, new IntPtr(style));
         }
 
         UpdateWindowBounds(window, config);

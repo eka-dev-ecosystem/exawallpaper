@@ -23,7 +23,9 @@
         <!-- Directory Structure -->
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
-                <Directory Id="INSTALLFOLDER" Name="ExaWallpaper" />
+                <Directory Id="INSTALLFOLDER" Name="ExaWallpaper">
+                    <Directory Id="SAMPLESFOLDER" Name="sample-wallpapers" />
+                </Directory>
             </Directory>
             <Directory Id="ProgramMenuFolder">
                 <Directory Id="ApplicationProgramsFolder" Name="ExaWallpaper" />
@@ -36,6 +38,16 @@
                 <File Id="ExaWallpaperEXE"
                       Source="$(var.PublishDir)\ExaWallpaper.exe"
                       KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="SAMPLESFOLDER">
+            <Component Id="SampleWallpapers" Guid="D6E7F8A9-B0C1-2D3E-4F5A-6B7C8D9E0F1A" Win64="yes">
+                <File Id="GojoSatoruMP4"
+                      Source="$(var.SourceDir)\sample-wallpapers\gojo_satoru_live.mp4"
+                      KeyPath="yes" />
+                <File Id="YaeMikoMP4"
+                      Source="$(var.SourceDir)\sample-wallpapers\yae_miko_live.mp4" />
             </Component>
         </DirectoryRef>
 
@@ -61,6 +73,7 @@
         <!-- Features -->
         <Feature Id="ProductFeature" Title="ExaWallpaper" Level="1">
             <ComponentRef Id="MainExecutable" />
+            <ComponentRef Id="SampleWallpapers" />
             <ComponentRef Id="ApplicationShortcut" />
         </Feature>
 

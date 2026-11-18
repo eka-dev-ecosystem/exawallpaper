@@ -33,16 +33,53 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Global crash and exception logging to %APPDATA%\ExaWallpaper\error.log
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string logFolder = Path.Combine(appData, "ExaWallpaper");
+        Directory.CreateDirectory(logFolder);
+        string logFile = Path.Combine(logFolder, "error.log");
+
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            string msg = $"[UnhandledException] {args.ExceptionObject}";
+            try { File.AppendAllText(logFile, $"{DateTime.Now}: {msg}\n"); } catch { }
+            System.Windows.MessageBox.Show(msg, "ExaWallpaper Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        };
+
+        DispatcherUnhandledException += (s, args) =>
+        {
+            string msg = $"[DispatcherUnhandledException] {args.Exception}";
+            try { File.AppendAllText(logFile, $"{DateTime.Now}: {msg}\n"); } catch { }
+            System.Windows.MessageBox.Show(msg, "ExaWallpaper Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            args.Handled = true;
+        };
+
         // Enforce single-instance on Windows
         _singleInstanceMutex = new System.Threading.Mutex(true, "ExaWallpaper_SingleInstance_Mutex", out bool isNewInstance);
         if (!isNewInstance)
         {
+            System.Windows.MessageBox.Show(
+                "ExaWallpaper is already running in the background.\nCheck your system tray (bottom-right icons near the clock) or click the tray icon to open Settings.",
+                "ExaWallpaper",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             Shutdown();
             return;
         }
 
         _configService = new ConfigService();
         _config = _configService.Load();
+
+        // If no video is selected yet, check for bundled sample wallpaper
+        if (string.IsNullOrEmpty(_config.VideoPath) || !File.Exists(_config.VideoPath))
+        {
+            string samplePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sample-wallpapers", "gojo_satoru_live.mp4");
+            if (File.Exists(samplePath))
+            {
+                _config.VideoPath = samplePath;
+                _configService.Save(_config);
+            }
+        }
 
         _windowService = new WallpaperWindowService();
         _fullscreenDetector = new FullscreenDetectorService(1000);
@@ -52,7 +89,7 @@ public partial class App : Application
         InitializeTray();
         InitializeListeners();
 
-        // If no video is selected yet, prompt user with settings
+        // If still no video is selected, prompt user with settings
         if (string.IsNullOrEmpty(_config.VideoPath) || !File.Exists(_config.VideoPath))
         {
             ShowSettings();
@@ -206,8 +243,11 @@ public partial class App : Application
             EvaluatePlayback();
         };
 
+        _settingsWindow.Topmost = true;
         _settingsWindow.Show();
         _settingsWindow.Activate();
+        _settingsWindow.Focus();
+        _settingsWindow.Topmost = false;
     }
 
     private void ShutdownApp()

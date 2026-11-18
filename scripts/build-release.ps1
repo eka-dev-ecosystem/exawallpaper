@@ -62,9 +62,12 @@ if (-not (Test-Path "$publishDir\ExaWallpaper.exe")) {
     Write-Error "Build failed: ExaWallpaper.exe was not created."
 }
 
-# Copy documentation
+# Copy documentation and sample wallpapers
 Copy-Item "$rootDir\README.md" -Destination $publishDir -ErrorAction SilentlyContinue
 Copy-Item "$rootDir\LICENSE" -Destination $publishDir -ErrorAction SilentlyContinue
+if (Test-Path "$rootDir\sample-wallpapers") {
+    Copy-Item "$rootDir\sample-wallpapers" -Destination $publishDir -Recurse -Force
+}
 
 Write-Host "--> Compressing to $zipPath..." -ForegroundColor Yellow
 Compress-Archive -Path "$publishDir\*" -DestinationPath $zipPath -Force
