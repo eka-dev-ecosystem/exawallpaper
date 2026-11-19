@@ -88,37 +88,77 @@ public final class DesktopWindowService {
     }
 
     public func loadVideo(path: String) {
-        guard let url = resolveURL(from: path) else { return }
-        instances.forEach { instance in
-            instance.playerService.loadVideo(
-                url: url,
-                isMuted: currentConfig.isMuted,
-                volume: Float(currentConfig.volume),
-                scalingMode: currentConfig.scalingMode
-            )
-        }
+        currentConfig.videoPath = path
+        reconfigureWindows()
     }
 
     private func reconfigureWindows() {
         cleanup()
 
-        let screens: [NSScreen]
-        if currentConfig.multiMonitorMode == "PrimaryOnly" {
-            if let main = NSScreen.main {
-                screens = [main]
-            } else {
-                screens = NSScreen.screens
-            }
-        } else {
-            screens = NSScreen.screens
-        }
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
 
-        for screen in screens {
-            let instance = createDesktopWindow(for: screen)
+        switch currentConfig.multiMonitorMode {
+        case "Span":
+            // "ke 3 monitor jadi satu" - Span single window across bounding frame of all screens
+            var unionFrame = screens[0].frame
+            for s in screens.dropFirst() {
+                unionFrame = unionFrame.union(s.frame)
+            }
+            let targetScreen = NSScreen.main ?? screens[0]
+            let instance = createDesktopWindow(frame: unionFrame, screen: targetScreen)
             instances.append(instance)
 
-            if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path) {
-                if let url = resolveURL(from: path) {
+            if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path),
+               let url = resolveURL(from: path) {
+                instance.playerService.loadVideo(
+                    url: url,
+                    isMuted: currentConfig.isMuted,
+                    volume: Float(currentConfig.volume),
+                    scalingMode: currentConfig.scalingMode
+                )
+            }
+
+        case "PerMonitor":
+            // "setiap monitor bisa beda beda" - Separate windows playing monitor-specific videos
+            for (index, screen) in screens.enumerated() {
+                let instance = createDesktopWindow(frame: screen.frame, screen: screen)
+                instances.append(instance)
+
+                let selectedPath = currentConfig.monitorVideos[String(index)] ?? currentConfig.videoPath
+                if let path = selectedPath, FileManager.default.fileExists(atPath: path),
+                   let url = resolveURL(from: path) {
+                    instance.playerService.loadVideo(
+                        url: url,
+                        isMuted: currentConfig.isMuted,
+                        volume: Float(currentConfig.volume),
+                        scalingMode: currentConfig.scalingMode
+                    )
+                }
+            }
+
+        case "PrimaryOnly":
+            let screen = NSScreen.main ?? screens[0]
+            let instance = createDesktopWindow(frame: screen.frame, screen: screen)
+            instances.append(instance)
+
+            if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path),
+               let url = resolveURL(from: path) {
+                instance.playerService.loadVideo(
+                    url: url,
+                    isMuted: currentConfig.isMuted,
+                    volume: Float(currentConfig.volume),
+                    scalingMode: currentConfig.scalingMode
+                )
+            }
+
+        default: // "Duplicate" or legacy "AllDisplays"
+            for screen in screens {
+                let instance = createDesktopWindow(frame: screen.frame, screen: screen)
+                instances.append(instance)
+
+                if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path),
+                   let url = resolveURL(from: path) {
                     instance.playerService.loadVideo(
                         url: url,
                         isMuted: currentConfig.isMuted,
@@ -130,9 +170,9 @@ public final class DesktopWindowService {
         }
     }
 
-    private func createDesktopWindow(for screen: NSScreen) -> DisplayInstance {
+    private func createDesktopWindow(frame: NSRect, screen: NSScreen) -> DisplayInstance {
         let window = NSWindow(
-            contentRect: screen.frame,
+            contentRect: frame,
             styleMask: [.borderless],
             backing: .buffered,
             defer: false,
@@ -153,7 +193,7 @@ public final class DesktopWindowService {
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
         let playerService = VideoPlayerService()
-        let hostingView = PlayerHostingView(frame: NSRect(origin: .zero, size: screen.frame.size), playerLayer: playerService.playerLayer)
+        let hostingView = PlayerHostingView(frame: NSRect(origin: .zero, size: frame.size), playerLayer: playerService.playerLayer)
         window.contentView = hostingView
 
         window.orderFront(nil)

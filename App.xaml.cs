@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Windows;
@@ -15,7 +16,7 @@ namespace ExaWallpaper;
 public partial class App : Application
 {
     private NotifyIcon? _notifyIcon;
-    private WallpaperWindow? _wallpaperWindow;
+    private readonly List<WallpaperWindow> _wallpaperWindows = new();
     private SettingsWindow? _settingsWindow;
 
     private ConfigService _configService = null!;
@@ -44,14 +45,14 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
             string msg = $"[UnhandledException] {args.ExceptionObject}";
-            try { File.AppendAllText(logFile, $"{DateTime.Now}: {msg}\n"); } catch { }
+            try { File.AppendAllText(logFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}: {msg}\n"); } catch { }
             System.Windows.MessageBox.Show(msg, "ExaWallpaper Error", MessageBoxButton.OK, MessageBoxImage.Error);
         };
 
         DispatcherUnhandledException += (s, args) =>
         {
             string msg = $"[DispatcherUnhandledException] {args.Exception}";
-            try { File.AppendAllText(logFile, $"{DateTime.Now}: {msg}\n"); } catch { }
+            try { File.AppendAllText(logFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}: {msg}\n"); } catch { }
             System.Windows.MessageBox.Show(msg, "ExaWallpaper Error", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
@@ -114,7 +115,7 @@ public partial class App : Application
         _fullscreenDetector = new FullscreenDetectorService(1000);
         _powerMonitor = new PowerMonitorService();
 
-        InitializeWallpaperWindow();
+        ReconfigureWallpaperWindows();
         InitializeTray();
         InitializeListeners();
 
@@ -138,22 +139,70 @@ public partial class App : Application
         catch { }
     }
 
-    private void InitializeWallpaperWindow()
+    private void ReconfigureWallpaperWindows()
     {
-        Log($"InitializeWallpaperWindow: VideoPath = '{_config.VideoPath}'");
-        _wallpaperWindow = new WallpaperWindow();
-        _wallpaperWindow.Show();
-        _windowService.AttachToDesktop(_wallpaperWindow, _config);
+        Log($"ReconfigureWallpaperWindows: Mode = '{_config.MultiMonitorMode}', DefaultVideo = '{_config.VideoPath}'");
 
-        if (!string.IsNullOrEmpty(_config.VideoPath) && File.Exists(_config.VideoPath))
+        foreach (var win in _wallpaperWindows)
         {
-            _wallpaperWindow.SetMuted(_config.IsMuted);
-            _wallpaperWindow.SetVolume(_config.Volume);
-            _wallpaperWindow.SetStretchMode(_config.StretchMode);
-            _wallpaperWindow.LoadVideo(_config.VideoPath);
-            _state.CurrentVideoPath = _config.VideoPath;
-            _state.IsPlaying = true;
+            _windowService.DetachWindow(win);
+            win.Close();
         }
+        _wallpaperWindows.Clear();
+
+        switch (_config.MultiMonitorMode)
+        {
+            case "Span":
+                // "ke 3 monitor jadi satu" - VirtualScreen spanning across all connected monitors
+                var vs = SystemInformation.VirtualScreen;
+                CreateWindowForBounds(vs.X, vs.Y, vs.Width, vs.Height, _config.VideoPath);
+                break;
+
+            case "PerMonitor":
+                // "setiap monitor bisa beda beda" - Separate window for each screen with monitor-specific video
+                var allScreens = Screen.AllScreens;
+                for (int i = 0; i < allScreens.Length; i++)
+                {
+                    var s = allScreens[i];
+                    string? video = _config.MonitorVideos.TryGetValue(i.ToString(), out var p) && File.Exists(p)
+                        ? p
+                        : _config.VideoPath;
+                    CreateWindowForBounds(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height, video);
+                }
+                break;
+
+            case "PrimaryOnly":
+                var primary = Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
+                CreateWindowForBounds(primary.X, primary.Y, primary.Width, primary.Height, _config.VideoPath);
+                break;
+
+            default: // "Duplicate"
+                foreach (var s in Screen.AllScreens)
+                {
+                    CreateWindowForBounds(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height, _config.VideoPath);
+                }
+                break;
+        }
+
+        EvaluatePlayback();
+    }
+
+    private void CreateWindowForBounds(int x, int y, int width, int height, string? videoPath)
+    {
+        var win = new WallpaperWindow();
+        win.SetMuted(_config.IsMuted);
+        win.SetVolume(_config.Volume);
+        win.SetStretchMode(_config.StretchMode);
+        win.Show();
+
+        _windowService.AttachToDesktop(win, x, y, width, height);
+
+        if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
+        {
+            win.LoadVideo(videoPath);
+        }
+
+        _wallpaperWindows.Add(win);
     }
 
     private void InitializeTray()
@@ -164,7 +213,6 @@ public partial class App : Application
             Text = "ExaWallpaper"
         };
 
-        // Try load app icon
         string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "app.ico");
         if (File.Exists(iconPath))
         {
@@ -212,24 +260,33 @@ public partial class App : Application
             _state.IsPausedByPower = shouldPause;
             EvaluatePlayback();
         };
+
+        // Listen for display changes (monitors plugged / unplugged)
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (s, e) =>
+        {
+            Dispatcher.Invoke(ReconfigureWallpaperWindows);
+        };
     }
 
     private void EvaluatePlayback()
     {
-        if (_wallpaperWindow == null) return;
-
-        Log($"EvaluatePlayback: ShouldBePlaying = {_state.ShouldBePlaying}, IsPausedByFullscreen = {_state.IsPausedByFullscreen}, IsPausedByPower = {_state.IsPausedByPower}, IsPausedByUser = {_state.IsPausedByUser}");
-        if (_state.ShouldBePlaying)
+        Log($"EvaluatePlayback: ShouldBePlaying = {_state.ShouldBePlaying}, WindowsCount = {_wallpaperWindows.Count}");
+        foreach (var win in _wallpaperWindows)
         {
-            _wallpaperWindow.Play();
-            _state.IsPlaying = true;
-            if (_playPauseMenuItem != null) _playPauseMenuItem.Text = "Pause";
+            if (_state.ShouldBePlaying)
+            {
+                win.Play();
+            }
+            else
+            {
+                win.Pause();
+            }
         }
-        else
+
+        _state.IsPlaying = _state.ShouldBePlaying && _wallpaperWindows.Count > 0;
+        if (_playPauseMenuItem != null)
         {
-            _wallpaperWindow.Pause();
-            _state.IsPlaying = false;
-            if (_playPauseMenuItem != null) _playPauseMenuItem.Text = "Play";
+            _playPauseMenuItem.Text = _state.IsPlaying ? "Pause" : "Play";
         }
     }
 
@@ -243,7 +300,10 @@ public partial class App : Application
     {
         _config.IsMuted = !_config.IsMuted;
         _configService.Save(_config);
-        _wallpaperWindow?.SetMuted(_config.IsMuted);
+        foreach (var win in _wallpaperWindows)
+        {
+            win.SetMuted(_config.IsMuted);
+        }
 
         if (_muteMenuItem != null)
         {
@@ -262,28 +322,13 @@ public partial class App : Application
         _settingsWindow = new SettingsWindow(_config, _configService);
         _settingsWindow.ConfigApplied += updatedConfig =>
         {
-            if (_wallpaperWindow != null)
-            {
-                _wallpaperWindow.SetMuted(updatedConfig.IsMuted);
-                _wallpaperWindow.SetVolume(updatedConfig.Volume);
-                _wallpaperWindow.SetStretchMode(updatedConfig.StretchMode);
-                _windowService.UpdateWindowBounds(_wallpaperWindow, updatedConfig);
-
-                if (!string.IsNullOrEmpty(updatedConfig.VideoPath) &&
-                    updatedConfig.VideoPath != _state.CurrentVideoPath)
-                {
-                    _wallpaperWindow.LoadVideo(updatedConfig.VideoPath);
-                    _state.CurrentVideoPath = updatedConfig.VideoPath;
-                    _state.IsPlaying = true;
-                }
-            }
+            _config = updatedConfig;
+            ReconfigureWallpaperWindows();
 
             if (_muteMenuItem != null)
             {
                 _muteMenuItem.Text = updatedConfig.IsMuted ? "Unmute" : "Mute";
             }
-
-            EvaluatePlayback();
         };
 
         _settingsWindow.Topmost = true;
@@ -297,7 +342,6 @@ public partial class App : Application
     {
         _fullscreenDetector.Stop();
         _powerMonitor.Dispose();
-
         _windowService?.RestoreDesktop();
 
         if (_notifyIcon != null)
@@ -313,7 +357,12 @@ public partial class App : Application
             _singleInstanceMutex = null;
         }
 
-        _wallpaperWindow?.Close();
+        foreach (var win in _wallpaperWindows)
+        {
+            win.Close();
+        }
+        _wallpaperWindows.Clear();
+
         Shutdown();
     }
 

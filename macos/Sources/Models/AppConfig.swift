@@ -7,7 +7,8 @@ public struct AppConfig: Codable, Equatable {
     public var scalingMode: String // "AspectFill", "AspectFit", "Stretch"
     public var autoPauseOnFullscreen: Bool
     public var autoPauseOnBattery: Bool
-    public var multiMonitorMode: String // "AllDisplays", "PrimaryOnly"
+    public var multiMonitorMode: String // "Span", "PerMonitor", "Duplicate", "PrimaryOnly"
+    public var monitorVideos: [String: String]
     public var runAtStartup: Bool
 
     public init(
@@ -17,7 +18,8 @@ public struct AppConfig: Codable, Equatable {
         scalingMode: String = "AspectFill",
         autoPauseOnFullscreen: Bool = true,
         autoPauseOnBattery: Bool = true,
-        multiMonitorMode: String = "AllDisplays",
+        multiMonitorMode: String = "Span",
+        monitorVideos: [String: String] = [:],
         runAtStartup: Bool = false
     ) {
         self.videoPath = videoPath
@@ -27,6 +29,7 @@ public struct AppConfig: Codable, Equatable {
         self.autoPauseOnFullscreen = autoPauseOnFullscreen
         self.autoPauseOnBattery = autoPauseOnBattery
         self.multiMonitorMode = multiMonitorMode
+        self.monitorVideos = monitorVideos
         self.runAtStartup = runAtStartup
     }
 

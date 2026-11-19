@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -12,7 +13,8 @@ namespace ExaWallpaper.Services;
 
 public class WallpaperWindowService
 {
-    private IntPtr _windowHandle = IntPtr.Zero;
+    private readonly List<IntPtr> _attachedHandles = new();
+    private readonly object _handleLock = new();
     private IntPtr _workerW = IntPtr.Zero;
     private DispatcherTimer? _zOrderTimer;
 
@@ -58,7 +60,6 @@ public class WallpaperWindowService
 
         if (workerw == IntPtr.Zero)
         {
-            // Fallback: dedicated thread connected to "Default" desktop
             var thread = new Thread(() =>
             {
                 IntPtr hDesk = NativeMethods.OpenDesktop("Default", 0, false, 0x01FF);
@@ -79,113 +80,44 @@ public class WallpaperWindowService
         return workerw;
     }
 
-    public void AttachToDesktop(Window window, AppConfig config)
+    public void AttachToDesktop(Window window, int x, int y, int width, int height)
     {
         var helper = new WindowInteropHelper(window);
-        _windowHandle = helper.EnsureHandle();
+        IntPtr hWnd = helper.EnsureHandle();
+        if (hWnd == IntPtr.Zero) return;
 
-        Log($"AttachToDesktop starting for hWnd: 0x{_windowHandle.ToInt64():X}");
+        lock (_handleLock)
+        {
+            if (!_attachedHandles.Contains(hWnd))
+            {
+                _attachedHandles.Add(hWnd);
+            }
+        }
+
+        Log($"AttachToDesktop starting for hWnd: 0x{hWnd.ToInt64():X} at {x},{y} {width}x{height}");
 
         // 1. Locate the WorkerW window responsible for rendering the static desktop wallpaper
-        _workerW = FindWorkerW();
+        if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
+        {
+            _workerW = FindWorkerW();
+        }
+
         if (_workerW != IntPtr.Zero)
         {
-            // Hide static wallpaper so our WPF window at HWND_BOTTOM shines through!
             NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
-            Log($"WorkerW 0x{_workerW.ToInt64():X} found and hidden.");
-        }
-        else
-        {
-            Log("Warning: WorkerW not found at startup; will attempt discovery during maintenance ticks.");
         }
 
-        // 2. Set window style as a non-activating tool window
-        // Do NOT call SetParent - keeping it as a top-level window preserves 100% DirectX hardware acceleration
-        // and eliminates cross-process reparenting bugs and mouse click interception issues.
-        long exStyle = NativeMethods.GetWindowLongPtr(_windowHandle, NativeMethods.GWL_EXSTYLE).ToInt64();
+        // 2. Set window style as a non-activating tool window at HWND_BOTTOM
+        long exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt64();
         exStyle |= (NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
-        // Ensure WS_EX_LAYERED is removed so video playback renders with full hardware direct flip
         exStyle &= ~NativeMethods.WS_EX_LAYERED;
-        NativeMethods.SetWindowLongPtr(_windowHandle, NativeMethods.GWL_EXSTYLE, new IntPtr(exStyle));
+        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, new IntPtr(exStyle));
 
         // 3. Add WndProc hook to ignore mouse activations
-        var source = HwndSource.FromHwnd(_windowHandle);
+        var source = HwndSource.FromHwnd(hWnd);
         source?.AddHook(WndProc);
 
         // 4. Position window at HWND_BOTTOM
-        UpdateWindowBounds(window, config);
-
-        // 5. Start lightweight maintenance timer to guarantee HWND_BOTTOM Z-order and keep WorkerW hidden
-        _zOrderTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(2)
-        };
-        _zOrderTimer.Tick += (s, e) =>
-        {
-            if (_windowHandle != IntPtr.Zero && NativeMethods.IsWindow(_windowHandle))
-            {
-                NativeMethods.SetWindowPos(
-                    _windowHandle,
-                    new IntPtr(NativeMethods.HWND_BOTTOM),
-                    0, 0, 0, 0,
-                    NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
-            }
-
-            if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
-            {
-                _workerW = FindWorkerW();
-                if (_workerW != IntPtr.Zero)
-                {
-                    Log($"WorkerW 0x{_workerW.ToInt64():X} discovered dynamically.");
-                }
-            }
-
-            if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
-            {
-                NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
-            }
-        };
-        _zOrderTimer.Start();
-
-        Log("AttachToDesktop completed successfully.");
-    }
-
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == NativeMethods.WM_MOUSEACTIVATE)
-        {
-            handled = true;
-            return new IntPtr(NativeMethods.MA_NOACTIVATE);
-        }
-
-        return IntPtr.Zero;
-    }
-
-    public void UpdateWindowBounds(Window window, AppConfig config)
-    {
-        var helper = new WindowInteropHelper(window);
-        IntPtr hWnd = helper.Handle;
-        if (hWnd == IntPtr.Zero) return;
-
-        int x, y, width, height;
-
-        if (config.MultiMonitorMode == "PrimaryOnly")
-        {
-            var primary = Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
-            x = primary.X;
-            y = primary.Y;
-            width = primary.Width;
-            height = primary.Height;
-        }
-        else
-        {
-            var virtualScreen = SystemInformation.VirtualScreen;
-            x = virtualScreen.X;
-            y = virtualScreen.Y;
-            width = virtualScreen.Width;
-            height = virtualScreen.Height;
-        }
-
         window.Left = x;
         window.Top = y;
         window.Width = width;
@@ -200,7 +132,73 @@ public class WallpaperWindowService
             height,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
 
-        Log($"UpdateWindowBounds applied: {x},{y} {width}x{height} at HWND_BOTTOM");
+        EnsureTimerStarted();
+    }
+
+    public void DetachWindow(Window window)
+    {
+        var helper = new WindowInteropHelper(window);
+        IntPtr hWnd = helper.Handle;
+        if (hWnd == IntPtr.Zero) return;
+
+        lock (_handleLock)
+        {
+            _attachedHandles.Remove(hWnd);
+        }
+    }
+
+    private void EnsureTimerStarted()
+    {
+        if (_zOrderTimer != null) return;
+
+        _zOrderTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _zOrderTimer.Tick += (s, e) =>
+        {
+            lock (_handleLock)
+            {
+                for (int i = _attachedHandles.Count - 1; i >= 0; i--)
+                {
+                    IntPtr h = _attachedHandles[i];
+                    if (h != IntPtr.Zero && NativeMethods.IsWindow(h))
+                    {
+                        NativeMethods.SetWindowPos(
+                            h,
+                            new IntPtr(NativeMethods.HWND_BOTTOM),
+                            0, 0, 0, 0,
+                            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+                    }
+                    else
+                    {
+                        _attachedHandles.RemoveAt(i);
+                    }
+                }
+            }
+
+            if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
+            {
+                _workerW = FindWorkerW();
+            }
+
+            if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
+            {
+                NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
+            }
+        };
+        _zOrderTimer.Start();
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == NativeMethods.WM_MOUSEACTIVATE)
+        {
+            handled = true;
+            return new IntPtr(NativeMethods.MA_NOACTIVATE);
+        }
+
+        return IntPtr.Zero;
     }
 
     public void RestoreDesktop()
@@ -208,6 +206,11 @@ public class WallpaperWindowService
         Log("RestoreDesktop called.");
         _zOrderTimer?.Stop();
         _zOrderTimer = null;
+
+        lock (_handleLock)
+        {
+            _attachedHandles.Clear();
+        }
 
         if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
         {
