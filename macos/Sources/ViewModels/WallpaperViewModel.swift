@@ -22,7 +22,15 @@ public final class WallpaperViewModel {
         setupListeners()
         desktopService.configure(with: config)
 
-        if let path = config.videoPath, FileManager.default.fileExists(atPath: path) {
+        var activeVideo = config.videoPath
+        if activeVideo == nil || !FileManager.default.fileExists(atPath: activeVideo!) {
+            if let bundledSample = Bundle.main.path(forResource: "sakurajima_mai_live", ofType: "mp4", inDirectory: "sample-wallpapers") ??
+                                   Bundle.main.path(forResource: "gojo_satoru_live", ofType: "mp4", inDirectory: "sample-wallpapers") {
+                activeVideo = bundledSample
+            }
+        }
+
+        if let path = activeVideo, FileManager.default.fileExists(atPath: path) {
             state.currentVideoPath = path
             state.isPlaying = true
             desktopService.loadVideo(path: path)

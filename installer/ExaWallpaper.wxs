@@ -48,6 +48,8 @@
                       KeyPath="yes" />
                 <File Id="YaeMikoMP4"
                       Source="$(var.SourceDir)\sample-wallpapers\yae_miko_live.mp4" />
+                <File Id="SakurajimaMaiMP4"
+                      Source="$(var.SourceDir)\sample-wallpapers\sakurajima_mai_live.mp4" />
             </Component>
         </DirectoryRef>
 

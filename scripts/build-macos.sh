@@ -31,6 +31,13 @@ mkdir -p "$BUNDLE_DIR/Contents/Resources"
 cp "$MACOS_DIR/.build/release/ExaWallpaper" "$BUNDLE_DIR/Contents/MacOS/ExaWallpaper"
 chmod +x "$BUNDLE_DIR/Contents/MacOS/ExaWallpaper"
 
+# 3b. Copy sample wallpapers
+if [ -d "$ROOT_DIR/sample-wallpapers" ]; then
+    echo "🎬 Bundling sample wallpapers..."
+    mkdir -p "$BUNDLE_DIR/Contents/Resources/sample-wallpapers"
+    cp "$ROOT_DIR/sample-wallpapers"/*.mp4 "$BUNDLE_DIR/Contents/Resources/sample-wallpapers/"
+fi
+
 # 4. Generate AppIcon.icns from Resources/app.png if available
 if [ -f "$ROOT_DIR/Resources/app.png" ]; then
     echo "🎨 Generating AppIcon.icns..."
