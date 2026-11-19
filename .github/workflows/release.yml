@@ -2,21 +2,103 @@ name: Release ExaWallpaper
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+        description: 'Release version tag (optional, e.g. v1.0.0)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
+  prepare-version:
+    name: Determine Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version_step.outputs.version }}
+      should_release: ${{ steps.version_step.outputs.should_release }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate Next Version Tag
+        id: version_step
+        run: |
+          # 1. If triggered by git tag
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Triggered by tag: $TAG"
+            exit 0
+          fi
+
+          # 2. If triggered by workflow_dispatch with explicit version input
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Triggered manually with version: $TAG"
+            exit 0
+          fi
+
+          # 3. Check for skip flags in latest commit
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MSG" | grep -qiE '\[(skip ci|skip release)\]'; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "Skip release flag detected."
+            exit 0
+          fi
+
+          # 4. Auto-versioning from push to main
+          LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            MAJOR=1
+            MINOR=0
+            PATCH=0
+          else
+            CLEAN_VER="${LATEST_TAG#v}"
+            MAJOR=$(echo "$CLEAN_VER" | cut -d. -f1)
+            MINOR=$(echo "$CLEAN_VER" | cut -d. -f2)
+            PATCH=$(echo "$CLEAN_VER" | cut -d. -f3)
+            MAJOR=${MAJOR:-1}
+            MINOR=${MINOR:-0}
+            PATCH=${PATCH:-0}
+          fi
+
+          # Determine bump type based on conventional commit prefix
+          if echo "$COMMIT_MSG" | grep -qiE '^(feat|feature)(\(.*\))?:'; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEXT_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "Previous tag: $LATEST_TAG"
+          echo "Determined next auto version: $NEXT_TAG"
+
+          # Tag origin
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG [skip ci]"
+          git push origin "$NEXT_TAG" || echo "Tag push skipped or already exists"
+
+          echo "version=$NEXT_TAG" >> $GITHUB_OUTPUT
+          echo "should_release=true" >> $GITHUB_OUTPUT
+
   build-windows:
     name: Build Windows (win-x64)
+    needs: prepare-version
+    if: needs.prepare-version.outputs.should_release == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -41,7 +123,7 @@ jobs:
       - name: Package Release ZIP
         shell: pwsh
         run: |
-          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.version }}" }
+          $tag = "${{ needs.prepare-version.outputs.version }}"
           $zipName = "ExaWallpaper-$tag-win-x64.zip"
           Copy-Item -Path "README.md", "LICENSE" -Destination "./publish" -ErrorAction SilentlyContinue
           if (Test-Path "sample-wallpapers") {
@@ -55,7 +137,7 @@ jobs:
       - name: Build MSI Installer (WiX)
         shell: pwsh
         run: |
-          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.version }}" }
+          $tag = "${{ needs.prepare-version.outputs.version }}"
           $cleanVersion = $tag.TrimStart('v')
           if ($cleanVersion -notmatch '^\d+\.\d+\.\d+') { $cleanVersion = "1.0.0.0" }
           elseif ($cleanVersion -match '^\d+\.\d+\.\d+$') { $cleanVersion = "$cleanVersion.0" }
@@ -78,21 +160,24 @@ jobs:
 
   build-macos:
     name: Build macOS (arm64)
+    needs: prepare-version
+    if: needs.prepare-version.outputs.should_release == 'true'
     runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build and Package macOS App
+      - name: Build and Package macOS App & DMG
         run: |
-          TAG="${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.version }}"
+          TAG="${{ needs.prepare-version.outputs.version }}"
           chmod +x ./scripts/build-macos.sh
           ./scripts/build-macos.sh "$TAG"
 
       - name: Prepare macOS Artifacts
         run: |
           mkdir -p artifacts
-          cp dist/macos/*.zip artifacts/
+          cp dist/macos/*.zip artifacts/ || true
+          cp dist/macos/*.dmg artifacts/ || true
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
@@ -102,7 +187,8 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-windows, build-macos]
+    needs: [prepare-version, build-windows, build-macos]
+    if: needs.prepare-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -115,7 +201,7 @@ jobs:
 
       - name: Prepare Release Assets & Checksums
         run: |
-          TAG="${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.version }}"
+          TAG="${{ needs.prepare-version.outputs.version }}"
           echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
           
           mkdir -p ./dist-release

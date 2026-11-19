@@ -1,8 +1,6 @@
-name: CI Build & Validation
+name: CI Validation
 
 on:
-  push:
-    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:

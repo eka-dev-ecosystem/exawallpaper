@@ -89,6 +89,14 @@ EOF
 echo "🔏 Applying ad-hoc code signature..."
 codesign --force --deep --sign - "$BUNDLE_DIR" > /dev/null 2>&1 || true
 
+# 7. Install to /Applications if writable (for local testing/use)
+if [ -w "/Applications" ]; then
+    echo "📲 Updating local install in /Applications/$APP_NAME.app..."
+    rm -rf "/Applications/$APP_NAME.app"
+    cp -R "$BUNDLE_DIR" "/Applications/$APP_NAME.app"
+    codesign --force --deep --sign - "/Applications/$APP_NAME.app" > /dev/null 2>&1 || true
+fi
+
 echo "📦 Packaging ZIP archive..."
 mkdir -p "$DIST_DIR"
 cd "$DIST_DIR"
@@ -96,6 +104,25 @@ ZIP_NAME="ExaWallpaper-$TAG-macos-arm64.zip"
 rm -f "$ZIP_NAME"
 zip -r -q -y "$ZIP_NAME" "$APP_NAME.app"
 
+echo "💿 Packaging DMG Disk Image..."
+DMG_TEMP="/tmp/ExaWallpaper-dmg-root"
+rm -rf "$DMG_TEMP"
+mkdir -p "$DMG_TEMP"
+cp -R "$BUNDLE_DIR" "$DMG_TEMP/"
+ln -s /Applications "$DMG_TEMP/Applications"
+
+DMG_NAME="ExaWallpaper-$TAG-macos-arm64.dmg"
+rm -f "$DIST_DIR/$DMG_NAME" "$DIST_DIR/ExaWallpaper-Installer.dmg"
+hdiutil create -volname "ExaWallpaper" \
+    -srcfolder "$DMG_TEMP" \
+    -ov -format UDZO \
+    "$DIST_DIR/$DMG_NAME" > /dev/null
+
+cp "$DIST_DIR/$DMG_NAME" "$DIST_DIR/ExaWallpaper-Installer.dmg"
+rm -rf "$DMG_TEMP"
+
 echo "✨ Build succeeded!"
 echo "📍 Application Bundle: $BUNDLE_DIR"
 echo "📦 Distributable ZIP:   $DIST_DIR/$ZIP_NAME"
+echo "💿 Distributable DMG:   $DIST_DIR/$DMG_NAME"
+echo "💿 Installer DMG:       $DIST_DIR/ExaWallpaper-Installer.dmg"
