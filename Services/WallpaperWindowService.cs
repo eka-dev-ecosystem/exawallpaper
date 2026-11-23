@@ -107,13 +107,14 @@ public class WallpaperWindowService
             NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
         }
 
-        // 2. Set window style as a non-activating tool window at HWND_BOTTOM
+        // 2. Set window style as a non-activating, transparent-to-mouse tool window at HWND_BOTTOM
+        // WS_EX_TRANSPARENT ensures mouse input passes directly through to desktop icons and context menus!
         long exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt64();
-        exStyle |= (NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
+        exStyle |= (NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TRANSPARENT);
         exStyle &= ~NativeMethods.WS_EX_LAYERED;
         NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, new IntPtr(exStyle));
 
-        // 3. Add WndProc hook to ignore mouse activations
+        // 3. Add WndProc hook to ignore mouse activations and pass hit-tests to underlying desktop
         var source = HwndSource.FromHwnd(hWnd);
         source?.AddHook(WndProc);
 
@@ -192,6 +193,12 @@ public class WallpaperWindowService
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == NativeMethods.WM_NCHITTEST)
+        {
+            handled = true;
+            return new IntPtr(NativeMethods.HTTRANSPARENT);
+        }
+
         if (msg == NativeMethods.WM_MOUSEACTIVATE)
         {
             handled = true;
