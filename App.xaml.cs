@@ -36,6 +36,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         // Global crash and exception logging to %APPDATA%\ExaWallpaper\error.log
         string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -379,6 +380,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Log($"App OnExit called with exitCode: {e.ApplicationExitCode}");
         _windowService?.RestoreDesktop();
         if (_singleInstanceMutex != null)
         {
