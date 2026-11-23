@@ -16,6 +16,8 @@ public class WallpaperWindowService
     private readonly List<IntPtr> _attachedHandles = new();
     private readonly object _handleLock = new();
     private IntPtr _desktopParent = IntPtr.Zero;
+    private IntPtr _insertAfter = IntPtr.Zero;
+    private IntPtr _workerW = IntPtr.Zero;
     private DispatcherTimer? _zOrderTimer;
 
     private static void Log(string message)
@@ -51,12 +53,16 @@ public class WallpaperWindowService
         return progman;
     }
 
-    public IntPtr FindDesktopWorkerW()
+    public void LocateDesktopLayers(out IntPtr parentContainer, out IntPtr insertAfter, out IntPtr staticWallpaperWorker)
     {
+        IntPtr pContainer = IntPtr.Zero;
+        IntPtr insAfter = IntPtr.Zero;
+        IntPtr staticWorker = IntPtr.Zero;
+
         IntPtr progman = FindProgman();
         if (progman != IntPtr.Zero)
         {
-            // Send 0x052C to Progman to instruct Windows Explorer to spawn WorkerW
+            // Send 0x052C to Progman
             NativeMethods.SendMessageTimeout(
                 progman,
                 0x052C,
@@ -66,40 +72,44 @@ public class WallpaperWindowService
                 1000,
                 out _);
 
-            // 1. In Windows 11 (24H2 / Build 26200+), WorkerW is a child inside Progman!
-            IntPtr childWorker = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);
-            if (childWorker != IntPtr.Zero)
+            // Windows 11 (24H2 / Build 26200+): SHELLDLL_DefView and static wallpaper WorkerW are inside Progman
+            IntPtr shell = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "SHELLDLL_DefView", null);
+            if (shell != IntPtr.Zero)
             {
-                Log($"Found child WorkerW inside Progman (Win11 style): 0x{childWorker.ToInt64():X}");
-                return childWorker;
+                pContainer = progman;
+                insAfter = shell;
+                staticWorker = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);
+                Log($"Located Win11 layers: Progman=0x{progman.ToInt64():X}, Shell=0x{shell.ToInt64():X}, StaticWorkerW=0x{staticWorker.ToInt64():X}");
+
+                parentContainer = pContainer;
+                insertAfter = insAfter;
+                staticWallpaperWorker = staticWorker;
+                return;
             }
         }
 
-        // 2. In Windows 10, look for top-level WorkerW spawned behind SHELLDLL_DefView
-        IntPtr workerw = IntPtr.Zero;
+        // Windows 10: SHELLDLL_DefView is inside a top-level WorkerW, and spawned WorkerW is the next sibling
         NativeMethods.EnumWindows((hwnd, lParam) =>
         {
             IntPtr shell = NativeMethods.FindWindowEx(hwnd, IntPtr.Zero, "SHELLDLL_DefView", null);
             if (shell != IntPtr.Zero)
             {
-                workerw = NativeMethods.FindWindowEx(IntPtr.Zero, hwnd, "WorkerW", null);
-                if (workerw != IntPtr.Zero)
+                IntPtr spawnedWorker = NativeMethods.FindWindowEx(IntPtr.Zero, hwnd, "WorkerW", null);
+                if (spawnedWorker != IntPtr.Zero)
                 {
+                    pContainer = spawnedWorker;
+                    insAfter = new IntPtr(NativeMethods.HWND_BOTTOM);
+                    staticWorker = IntPtr.Zero;
+                    Log($"Located Win10 layers: SpawnedWorkerW=0x{spawnedWorker.ToInt64():X}");
                     return false;
                 }
             }
             return true;
         }, IntPtr.Zero);
 
-        if (workerw != IntPtr.Zero)
-        {
-            Log($"Found spawned WorkerW behind desktop view (Win10 style): 0x{workerw.ToInt64():X}");
-            return workerw;
-        }
-
-        // 3. Fallback to Progman if no WorkerW found
-        Log($"Fallback: using Progman 0x{progman.ToInt64():X}");
-        return progman;
+        parentContainer = pContainer != IntPtr.Zero ? pContainer : progman;
+        insertAfter = insAfter != IntPtr.Zero ? insAfter : new IntPtr(NativeMethods.HWND_BOTTOM);
+        staticWallpaperWorker = staticWorker;
     }
 
     public void AttachToDesktop(Window window, int x, int y, int width, int height)
@@ -118,20 +128,16 @@ public class WallpaperWindowService
 
         Log($"AttachToDesktop starting for hWnd: 0x{hWnd.ToInt64():X} at {x},{y} {width}x{height}");
 
-        // 1. Locate the desktop canvas window (WorkerW)
-        if (_desktopParent == IntPtr.Zero || !NativeMethods.IsWindow(_desktopParent))
-        {
-            _desktopParent = FindDesktopWorkerW();
-        }
-        Log($"Target desktop parent: 0x{_desktopParent.ToInt64():X}");
+        LocateDesktopLayers(out _desktopParent, out _insertAfter, out _workerW);
 
-        // 2. Ensure WorkerW is visible! (Never hide it, it is the canvas)
-        if (_desktopParent != IntPtr.Zero && NativeMethods.IsWindow(_desktopParent))
+        // Hide static wallpaper WorkerW so video wallpaper displays on desktop!
+        if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW))
         {
-            NativeMethods.ShowWindow(_desktopParent, NativeMethods.SW_SHOW);
+            NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
+            Log($"Static wallpaper WorkerW 0x{_workerW.ToInt64():X} hidden.");
         }
 
-        // 3. Reparent window to desktopParent (WorkerW)
+        // Reparent window to desktop parent container (Progman in Win11, spawned WorkerW in Win10)
         if (_desktopParent != IntPtr.Zero)
         {
             long style = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE).ToInt64();
@@ -143,34 +149,35 @@ public class WallpaperWindowService
             Log($"SetParent called for hWnd: 0x{hWnd.ToInt64():X} -> parent: 0x{_desktopParent.ToInt64():X}, prevParent: 0x{prevParent.ToInt64():X}");
         }
 
-        // 4. Set window extended style as non-activating, transparent-to-mouse tool window
+        // Extended style
         long exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt64();
         exStyle |= (NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TRANSPARENT);
         exStyle &= ~NativeMethods.WS_EX_LAYERED;
         NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, new IntPtr(exStyle));
 
-        // 5. Add WndProc hook for hit testing and mouse activation pass-through
         var source = HwndSource.FromHwnd(hWnd);
         source?.AddHook(WndProc);
 
-        // 6. Map screen coordinates to parent-relative coordinates
         var pt = new NativeMethods.POINT { X = x, Y = y };
         if (_desktopParent != IntPtr.Zero)
         {
             NativeMethods.MapWindowPoints(IntPtr.Zero, _desktopParent, ref pt, 1);
         }
 
-        // 7. Position window at HWND_BOTTOM inside desktopParent
+        IntPtr insertPos = (_insertAfter != IntPtr.Zero && NativeMethods.IsWindow(_insertAfter))
+            ? _insertAfter
+            : new IntPtr(NativeMethods.HWND_BOTTOM);
+
         NativeMethods.SetWindowPos(
             hWnd,
-            new IntPtr(NativeMethods.HWND_BOTTOM),
+            insertPos,
             pt.X,
             pt.Y,
             width,
             height,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
 
-        Log($"Placed window 0x{hWnd.ToInt64():X} at HWND_BOTTOM ({pt.X},{pt.Y} {width}x{height}) inside parent 0x{_desktopParent.ToInt64():X}");
+        Log($"Placed window 0x{hWnd.ToInt64():X} at ({pt.X},{pt.Y} {width}x{height}) inside parent 0x{_desktopParent.ToInt64():X} after 0x{insertPos.ToInt64():X}");
 
         EnsureTimerStarted();
     }
@@ -211,9 +218,13 @@ public class WallpaperWindowService
                     IntPtr h = _attachedHandles[i];
                     if (h != IntPtr.Zero && NativeMethods.IsWindow(h))
                     {
+                        IntPtr pos = (_insertAfter != IntPtr.Zero && NativeMethods.IsWindow(_insertAfter))
+                            ? _insertAfter
+                            : new IntPtr(NativeMethods.HWND_BOTTOM);
+
                         NativeMethods.SetWindowPos(
                             h,
-                            new IntPtr(NativeMethods.HWND_BOTTOM),
+                            pos,
                             0, 0, 0, 0,
                             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
                     }
@@ -224,9 +235,9 @@ public class WallpaperWindowService
                 }
             }
 
-            if (_desktopParent != IntPtr.Zero && NativeMethods.IsWindow(_desktopParent) && !NativeMethods.IsWindowVisible(_desktopParent))
+            if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
             {
-                NativeMethods.ShowWindow(_desktopParent, NativeMethods.SW_SHOW);
+                NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
             }
         };
         _zOrderTimer.Start();
@@ -272,11 +283,11 @@ public class WallpaperWindowService
             _attachedHandles.Clear();
         }
 
-        if (_desktopParent != IntPtr.Zero && NativeMethods.IsWindow(_desktopParent))
+        if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW))
         {
-            NativeMethods.ShowWindow(_desktopParent, NativeMethods.SW_SHOW);
+            NativeMethods.ShowWindow(_workerW, NativeMethods.SW_SHOW);
             NativeMethods.InvalidateRect(IntPtr.Zero, IntPtr.Zero, true);
-            Log($"Desktop parent 0x{_desktopParent.ToInt64():X} restored and desktop invalidated.");
+            Log($"Static WorkerW 0x{_workerW.ToInt64():X} restored and desktop invalidated.");
         }
     }
 }
