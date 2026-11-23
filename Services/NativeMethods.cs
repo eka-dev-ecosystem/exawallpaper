@@ -39,6 +39,7 @@ internal static class NativeMethods
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
+    public const uint SWP_FRAMECHANGED = 0x0020;
     public const uint SWP_SHOWWINDOW = 0x0040;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -120,6 +121,9 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr GetParent(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);

@@ -205,8 +205,8 @@ public partial class App : Application
         win.SetVolume(_config.Volume);
         win.SetStretchMode(_config.StretchMode);
 
-        _windowService.AttachToDesktop(win, x, y, width, height);
         win.Show();
+        _windowService.AttachToDesktop(win, x, y, width, height);
 
         if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
         {

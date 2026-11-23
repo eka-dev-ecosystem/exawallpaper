@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using ExaWallpaper.Services;
 
 namespace ExaWallpaper.Views;
 
@@ -16,18 +17,6 @@ public partial class WallpaperWindow : Window
     {
         InitializeComponent();
         Loaded += OnWindowLoaded;
-    }
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-
-        var hwndSource = PresentationSource.FromVisual(this) as HwndSource;
-        if (hwndSource?.CompositionTarget != null)
-        {
-            hwndSource.CompositionTarget.RenderMode = RenderMode.SoftwareOnly;
-            Log("WallpaperWindow RenderMode set to SoftwareOnly.");
-        }
     }
 
     private void Log(string message)
@@ -45,7 +34,10 @@ public partial class WallpaperWindow : Window
 
     private void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
-        Log($"OnWindowLoaded called, pendingVideoPath: '{_pendingVideoPath}'");
+        var helper = new WindowInteropHelper(this);
+        IntPtr hWnd = helper.Handle;
+        IntPtr parent = NativeMethods.GetParent(hWnd);
+        Log($"OnWindowLoaded called, hWnd: 0x{hWnd.ToInt64():X}, Parent: 0x{parent.ToInt64():X}, pendingVideoPath: '{_pendingVideoPath}'");
         if (!string.IsNullOrEmpty(_pendingVideoPath))
         {
             PlayVideoInternal(_pendingVideoPath);
