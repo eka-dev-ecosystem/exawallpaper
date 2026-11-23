@@ -131,7 +131,7 @@ public partial class WallpaperWindow : Window
     private void Player_MediaEnded(object sender, RoutedEventArgs e)
     {
         Log("Player_MediaEnded fired, looping...");
-        Player.Stop();
+        Player.Position = TimeSpan.Zero;
         Player.Play();
     }
 
