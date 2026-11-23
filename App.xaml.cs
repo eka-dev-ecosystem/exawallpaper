@@ -31,6 +31,7 @@ public partial class App : Application
     private ToolStripMenuItem? _muteMenuItem;
 
     private static System.Threading.Mutex? _singleInstanceMutex;
+    private static readonly uint WM_SHOW_SETTINGS = NativeMethods.RegisterWindowMessage("ExaWallpaper_ShowSettings_Message");
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -92,10 +93,21 @@ public partial class App : Application
 
         if (!isNewInstance)
         {
-            Log("Another instance of ExaWallpaper is already running. Exiting silently.");
+            Log("Another instance of ExaWallpaper is already running. Broadcasting WM_SHOW_SETTINGS and exiting.");
+            NativeMethods.PostMessage(new IntPtr(NativeMethods.HWND_BROADCAST), WM_SHOW_SETTINGS, IntPtr.Zero, IntPtr.Zero);
             Shutdown();
             return;
         }
+
+        ComponentDispatcher.ThreadFilterMessage += (ref MSG msg, ref bool handled) =>
+        {
+            if (msg.message == WM_SHOW_SETTINGS)
+            {
+                Log("Received WM_SHOW_SETTINGS broadcast; opening SettingsWindow.");
+                Dispatcher.Invoke(() => ShowSettings());
+                handled = true;
+            }
+        };
 
         _configService = new ConfigService();
         _config = _configService.Load();
@@ -119,8 +131,19 @@ public partial class App : Application
         InitializeTray();
         InitializeListeners();
 
-        // If still no video is selected, prompt user with settings
-        if (string.IsNullOrEmpty(_config.VideoPath) || !File.Exists(_config.VideoPath))
+        bool isStartupLaunch = false;
+        foreach (var arg in e.Args)
+        {
+            if (arg.Equals("--startup", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--tray", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase))
+            {
+                isStartupLaunch = true;
+                break;
+            }
+        }
+
+        if (!isStartupLaunch)
         {
             ShowSettings();
         }
@@ -142,6 +165,7 @@ public partial class App : Application
     private void ReconfigureWallpaperWindows()
     {
         Log($"ReconfigureWallpaperWindows: Mode = '{_config.MultiMonitorMode}', DefaultVideo = '{_config.VideoPath}'");
+        _state.CurrentVideoPath = _config.VideoPath;
 
         foreach (var win in _wallpaperWindows)
         {
@@ -240,6 +264,7 @@ public partial class App : Application
 
         _notifyIcon.ContextMenuStrip = contextMenu;
         _notifyIcon.DoubleClick += (s, e) => ShowSettings();
+        _notifyIcon.ShowBalloonTip(2000, "ExaWallpaper", "ExaWallpaper aktif di system tray.", ToolTipIcon.Info);
     }
 
     private void InitializeListeners()

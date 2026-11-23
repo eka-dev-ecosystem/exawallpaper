@@ -86,6 +86,18 @@ if (Get-Command candle -ErrorAction SilentlyContinue) {
     Write-Host "--> WiX Toolset not found, skipping MSI build." -ForegroundColor DarkGray
 }
 
+# Build Inno Setup Installer if available
+$isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+$issFile = Join-Path $rootDir "installer\ExaWallpaper.iss"
+if ((Test-Path $isccPath) -and (Test-Path $issFile)) {
+    Write-Host "--> Building Inno Setup Installer..." -ForegroundColor Yellow
+    & $isccPath "/DMyAppVersion=$cleanVersion" $issFile | Out-Null
+    $setupExe = Join-Path $distDir "ExaWallpaper-$Version-Setup.exe"
+    if (Test-Path $setupExe) {
+        Write-Host "--> Inno Setup Installer created: $setupExe" -ForegroundColor Green
+    }
+}
+
 $fileSize = (Get-Item $zipPath).Length / 1MB
 $sha256 = (Get-FileHash $zipPath -Algorithm SHA256).Hash
 

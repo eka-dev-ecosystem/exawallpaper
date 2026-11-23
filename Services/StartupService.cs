@@ -35,7 +35,7 @@ public static class StartupService
                 string? exePath = Environment.ProcessPath;
                 if (!string.IsNullOrEmpty(exePath))
                 {
-                    key.SetValue(AppName, $"\"{exePath}\"");
+                    key.SetValue(AppName, $"\"{exePath}\" --startup");
                 }
             }
             else

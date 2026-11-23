@@ -11,6 +11,8 @@ internal static class NativeMethods
     public const int GWL_EXSTYLE = -20;
     public const uint WS_CHILD = 0x40000000;
     public const uint WS_VISIBLE = 0x10000000;
+    public const uint WS_CLIPSIBLINGS = 0x04000000;
+    public const uint WS_POPUP = 0x80000000;
     public const uint WS_EX_TOOLWINDOW = 0x00000080;
     public const uint WS_EX_NOACTIVATE = 0x08000000;
     public const uint WS_EX_TRANSPARENT = 0x00000020;
@@ -21,6 +23,7 @@ internal static class NativeMethods
 
     public const int HWND_TOP = 0;
     public const int HWND_BOTTOM = 1;
+    public const int HWND_BROADCAST = 0xffff;
 
     public const int SW_HIDE = 0;
     public const int SW_SHOW = 5;
@@ -72,7 +75,17 @@ internal static class NativeMethods
         public int Height => Bottom - Top;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int MapWindowPoints(IntPtr hWndFrom, IntPtr hWndTo, ref POINT lpPoints, uint cPoints);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr OpenDesktop(string lpszDesktop, uint dwFlags, bool fInherit, uint dwDesiredAccess);
@@ -80,6 +93,13 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetThreadDesktop(IntPtr hDesktop);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern uint RegisterWindowMessage(string lpString);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     public static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);

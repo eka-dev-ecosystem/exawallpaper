@@ -16,6 +16,7 @@ public class WallpaperWindowService
     private readonly List<IntPtr> _attachedHandles = new();
     private readonly object _handleLock = new();
     private IntPtr _workerW = IntPtr.Zero;
+    private IntPtr _desktopParent = IntPtr.Zero;
     private DispatcherTimer? _zOrderTimer;
 
     private static void Log(string message)
@@ -31,13 +32,67 @@ public class WallpaperWindowService
         catch { }
     }
 
-    public IntPtr FindWorkerW()
+    public IntPtr FindProgman()
     {
-        IntPtr workerw = IntPtr.Zero;
         IntPtr progman = NativeMethods.FindWindow("Progman", null);
+        if (progman == IntPtr.Zero)
+        {
+            var thread = new Thread(() =>
+            {
+                IntPtr hDesk = NativeMethods.OpenDesktop("Default", 0, false, 0x01FF);
+                if (hDesk != IntPtr.Zero && NativeMethods.SetThreadDesktop(hDesk))
+                {
+                    progman = NativeMethods.FindWindow("Progman", null);
+                }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+        }
+        return progman;
+    }
+
+    public IntPtr FindDesktopParent()
+    {
+        IntPtr progman = FindProgman();
         if (progman != IntPtr.Zero)
         {
-            workerw = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);
+            IntPtr shell = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "SHELLDLL_DefView", null);
+            if (shell != IntPtr.Zero)
+            {
+                Log($"Found SHELLDLL_DefView inside Progman (0x{progman.ToInt64():X})");
+                return progman;
+            }
+        }
+
+        IntPtr shellHost = IntPtr.Zero;
+        NativeMethods.EnumWindows((topWnd, lParam) =>
+        {
+            IntPtr s = NativeMethods.FindWindowEx(topWnd, IntPtr.Zero, "SHELLDLL_DefView", null);
+            if (s != IntPtr.Zero)
+            {
+                shellHost = topWnd;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+
+        if (shellHost != IntPtr.Zero)
+        {
+            Log($"Found SHELLDLL_DefView inside WorkerW/Host (0x{shellHost.ToInt64():X})");
+            return shellHost;
+        }
+
+        Log($"Fallback: using Progman 0x{progman.ToInt64():X}");
+        return progman;
+    }
+
+    public IntPtr FindWorkerW(IntPtr desktopParent)
+    {
+        IntPtr workerw = IntPtr.Zero;
+        if (desktopParent != IntPtr.Zero)
+        {
+            workerw = NativeMethods.FindWindowEx(desktopParent, IntPtr.Zero, "WorkerW", null);
         }
 
         if (workerw == IntPtr.Zero)
@@ -56,25 +111,6 @@ public class WallpaperWindowService
                 }
                 return true;
             }, IntPtr.Zero);
-        }
-
-        if (workerw == IntPtr.Zero)
-        {
-            var thread = new Thread(() =>
-            {
-                IntPtr hDesk = NativeMethods.OpenDesktop("Default", 0, false, 0x01FF);
-                if (hDesk != IntPtr.Zero && NativeMethods.SetThreadDesktop(hDesk))
-                {
-                    IntPtr p = NativeMethods.FindWindow("Progman", null);
-                    if (p != IntPtr.Zero)
-                    {
-                        workerw = NativeMethods.FindWindowEx(p, IntPtr.Zero, "WorkerW", null);
-                    }
-                }
-            });
-            thread.SetApartmentState(ApartmentState.STA);
-            thread.Start();
-            thread.Join();
         }
 
         return workerw;
@@ -96,42 +132,65 @@ public class WallpaperWindowService
 
         Log($"AttachToDesktop starting for hWnd: 0x{hWnd.ToInt64():X} at {x},{y} {width}x{height}");
 
-        // 1. Locate the WorkerW window responsible for rendering the static desktop wallpaper
+        // 1. Locate the desktop parent window hosting SHELLDLL_DefView (Progman or WorkerW)
+        if (_desktopParent == IntPtr.Zero || !NativeMethods.IsWindow(_desktopParent))
+        {
+            _desktopParent = FindDesktopParent();
+        }
+        Log($"Target desktop parent: 0x{_desktopParent.ToInt64():X}");
+
+        // 2. Locate WorkerW responsible for rendering static wallpaper and hide it
         if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
         {
-            _workerW = FindWorkerW();
+            _workerW = FindWorkerW(_desktopParent);
         }
 
-        if (_workerW != IntPtr.Zero)
+        if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW))
         {
             NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
+            Log($"WorkerW 0x{_workerW.ToInt64():X} hidden.");
         }
 
-        // 2. Set window style as a non-activating, transparent-to-mouse tool window at HWND_BOTTOM
-        // WS_EX_TRANSPARENT ensures mouse input passes directly through to desktop icons and context menus!
+        // 3. Reparent window to desktopParent (behind SHELLDLL_DefView!)
+        if (_desktopParent != IntPtr.Zero)
+        {
+            long style = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE).ToInt64();
+            style &= ~NativeMethods.WS_POPUP;
+            style |= (NativeMethods.WS_CHILD | NativeMethods.WS_VISIBLE | NativeMethods.WS_CLIPSIBLINGS);
+            NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE, new IntPtr(style));
+
+            IntPtr prevParent = NativeMethods.SetParent(hWnd, _desktopParent);
+            Log($"SetParent called for hWnd: 0x{hWnd.ToInt64():X} -> parent: 0x{_desktopParent.ToInt64():X}, prevParent: 0x{prevParent.ToInt64():X}");
+        }
+
+        // 4. Set window extended style as non-activating, transparent-to-mouse tool window
         long exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt64();
         exStyle |= (NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TRANSPARENT);
         exStyle &= ~NativeMethods.WS_EX_LAYERED;
         NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, new IntPtr(exStyle));
 
-        // 3. Add WndProc hook to ignore mouse activations and pass hit-tests to underlying desktop
+        // 5. Add WndProc hook for hit testing and mouse activation pass-through
         var source = HwndSource.FromHwnd(hWnd);
         source?.AddHook(WndProc);
 
-        // 4. Position window at HWND_BOTTOM
-        window.Left = x;
-        window.Top = y;
-        window.Width = width;
-        window.Height = height;
+        // 6. Map screen coordinates to parent-relative coordinates
+        var pt = new NativeMethods.POINT { X = x, Y = y };
+        if (_desktopParent != IntPtr.Zero)
+        {
+            NativeMethods.MapWindowPoints(IntPtr.Zero, _desktopParent, ref pt, 1);
+        }
 
+        // 7. Position window at HWND_BOTTOM inside desktopParent
         NativeMethods.SetWindowPos(
             hWnd,
             new IntPtr(NativeMethods.HWND_BOTTOM),
-            x,
-            y,
+            pt.X,
+            pt.Y,
             width,
             height,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+
+        Log($"Placed window 0x{hWnd.ToInt64():X} at HWND_BOTTOM ({pt.X},{pt.Y} {width}x{height}) inside parent 0x{_desktopParent.ToInt64():X}");
 
         EnsureTimerStarted();
     }
@@ -180,7 +239,7 @@ public class WallpaperWindowService
 
             if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
             {
-                _workerW = FindWorkerW();
+                _workerW = FindWorkerW(_desktopParent);
             }
 
             if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
@@ -221,7 +280,7 @@ public class WallpaperWindowService
 
         if (_workerW == IntPtr.Zero || !NativeMethods.IsWindow(_workerW))
         {
-            _workerW = FindWorkerW();
+            _workerW = FindWorkerW(_desktopParent);
         }
 
         if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW))
