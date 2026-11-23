@@ -60,22 +60,6 @@ public partial class App : Application
 
         Log("App OnStartup started.");
 
-        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
-
-        try
-        {
-            IntPtr hDesk = NativeMethods.OpenDesktop("Default", 0, false, 0x01FF);
-            if (hDesk != IntPtr.Zero)
-            {
-                bool setDesk = NativeMethods.SetThreadDesktop(hDesk);
-                Log($"SetThreadDesktop(Default) returned: {setDesk}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log($"SetThreadDesktop exception: {ex.Message}");
-        }
-
         // Enforce single-instance on Windows
         bool isNewInstance = false;
         try

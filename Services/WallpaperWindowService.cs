@@ -60,14 +60,22 @@ public class WallpaperWindowService
             NativeMethods.SendMessageTimeout(
                 progman,
                 0x052C,
-                new IntPtr(0xD),
-                new IntPtr(0x1),
+                IntPtr.Zero,
+                IntPtr.Zero,
                 NativeMethods.SendMessageTimeoutFlags.SMTO_NORMAL,
                 1000,
                 out _);
+
+            // 1. In Windows 11 (24H2 / Build 26200+), WorkerW is a child inside Progman!
+            IntPtr childWorker = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);
+            if (childWorker != IntPtr.Zero)
+            {
+                Log($"Found child WorkerW inside Progman (Win11 style): 0x{childWorker.ToInt64():X}");
+                return childWorker;
+            }
         }
 
-        // 1. Look for top-level WorkerW spawned behind SHELLDLL_DefView
+        // 2. In Windows 10, look for top-level WorkerW spawned behind SHELLDLL_DefView
         IntPtr workerw = IntPtr.Zero;
         NativeMethods.EnumWindows((hwnd, lParam) =>
         {
@@ -85,19 +93,8 @@ public class WallpaperWindowService
 
         if (workerw != IntPtr.Zero)
         {
-            Log($"Found spawned WorkerW behind desktop view: 0x{workerw.ToInt64():X}");
+            Log($"Found spawned WorkerW behind desktop view (Win10 style): 0x{workerw.ToInt64():X}");
             return workerw;
-        }
-
-        // 2. Look for child WorkerW inside Progman (Windows 11 Build 26200 / 24H2)
-        if (progman != IntPtr.Zero)
-        {
-            IntPtr childWorker = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);
-            if (childWorker != IntPtr.Zero)
-            {
-                Log($"Found child WorkerW inside Progman: 0x{childWorker.ToInt64():X}");
-                return childWorker;
-            }
         }
 
         // 3. Fallback to Progman if no WorkerW found
@@ -188,6 +185,13 @@ public class WallpaperWindowService
         {
             _attachedHandles.Remove(hWnd);
         }
+
+        try
+        {
+            NativeMethods.SetParent(hWnd, IntPtr.Zero);
+            NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
+        }
+        catch { }
     }
 
     private void EnsureTimerStarted()
@@ -253,6 +257,18 @@ public class WallpaperWindowService
 
         lock (_handleLock)
         {
+            foreach (var h in _attachedHandles)
+            {
+                if (h != IntPtr.Zero && NativeMethods.IsWindow(h))
+                {
+                    try
+                    {
+                        NativeMethods.SetParent(h, IntPtr.Zero);
+                        NativeMethods.ShowWindow(h, NativeMethods.SW_HIDE);
+                    }
+                    catch { }
+                }
+            }
             _attachedHandles.Clear();
         }
 

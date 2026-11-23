@@ -26,7 +26,7 @@ public partial class WallpaperWindow : Window
         if (hwndSource?.CompositionTarget != null)
         {
             hwndSource.CompositionTarget.RenderMode = RenderMode.SoftwareOnly;
-            Log("HwndTarget RenderMode forced to SoftwareOnly.");
+            Log("WallpaperWindow RenderMode set to SoftwareOnly.");
         }
     }
 
@@ -131,7 +131,7 @@ public partial class WallpaperWindow : Window
     private void Player_MediaEnded(object sender, RoutedEventArgs e)
     {
         Log("Player_MediaEnded fired, looping...");
-        Player.Position = TimeSpan.Zero;
+        Player.Stop();
         Player.Play();
     }
 
