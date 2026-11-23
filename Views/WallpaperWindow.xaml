@@ -7,9 +7,9 @@
         ShowInTaskbar="False"
         Focusable="False"
         IsHitTestVisible="False"
-        Background="Black"
+        Background="Transparent"
         Left="0" Top="0" Width="1920" Height="1080">
-    <Grid Background="Black" IsHitTestVisible="False">
+    <Grid Background="Transparent" IsHitTestVisible="False">
         <MediaElement x:Name="Player"
                       LoadedBehavior="Manual"
                       UnloadedBehavior="Manual"

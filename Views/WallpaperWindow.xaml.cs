@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace ExaWallpaper.Views;
@@ -15,6 +16,18 @@ public partial class WallpaperWindow : Window
     {
         InitializeComponent();
         Loaded += OnWindowLoaded;
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        var hwndSource = PresentationSource.FromVisual(this) as HwndSource;
+        if (hwndSource?.CompositionTarget != null)
+        {
+            hwndSource.CompositionTarget.RenderMode = RenderMode.SoftwareOnly;
+            Log("HwndTarget RenderMode forced to SoftwareOnly.");
+        }
     }
 
     private void Log(string message)

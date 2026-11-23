@@ -60,6 +60,8 @@ public partial class App : Application
 
         Log("App OnStartup started.");
 
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+
         try
         {
             IntPtr hDesk = NativeMethods.OpenDesktop("Default", 0, false, 0x01FF);
@@ -217,9 +219,9 @@ public partial class App : Application
         win.SetMuted(_config.IsMuted);
         win.SetVolume(_config.Volume);
         win.SetStretchMode(_config.StretchMode);
-        win.Show();
 
         _windowService.AttachToDesktop(win, x, y, width, height);
+        win.Show();
 
         if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
         {
