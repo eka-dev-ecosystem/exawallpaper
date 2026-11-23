@@ -72,16 +72,16 @@ public class WallpaperWindowService
                 1000,
                 out _);
 
-            // Windows 11 (24H2 / Build 26200+): SHELLDLL_DefView and WorkerW are inside Progman
+            // Windows 11 (24H2 / Build 26200+): SHELLDLL_DefView and static wallpaper WorkerW are inside Progman
             IntPtr shell = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "SHELLDLL_DefView", null);
             IntPtr workerW = NativeMethods.FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);
 
-            if (workerW != IntPtr.Zero)
+            if (shell != IntPtr.Zero)
             {
-                pContainer = workerW;
-                insAfter = IntPtr.Zero;
+                pContainer = progman;
+                insAfter = shell;
                 staticWorker = workerW;
-                Log($"Located Win11 layers: Progman=0x{progman.ToInt64():X}, Shell=0x{shell.ToInt64():X}, WorkerW=0x{workerW.ToInt64():X}");
+                Log($"Located Win11 layers: Progman=0x{progman.ToInt64():X}, Shell=0x{shell.ToInt64():X}, StaticWorkerW=0x{staticWorker.ToInt64():X}");
 
                 parentContainer = pContainer;
                 insertAfter = insAfter;
@@ -136,14 +136,14 @@ public class WallpaperWindowService
 
         LocateDesktopLayers(out _desktopParent, out _insertAfter, out _workerW);
 
-        // Ensure WorkerW wallpaper host is visible and active
+        // Hide static wallpaper WorkerW so video wallpaper displays on desktop!
         if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW))
         {
-            NativeMethods.ShowWindow(_workerW, NativeMethods.SW_SHOW);
-            Log($"WorkerW 0x{_workerW.ToInt64():X} shown.");
+            NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
+            Log($"Static wallpaper WorkerW 0x{_workerW.ToInt64():X} hidden.");
         }
 
-        // Reparent window to desktop parent container (WorkerW)
+        // Reparent window to desktop parent container (Progman in Win11, spawned WorkerW in Win10)
         if (_desktopParent != IntPtr.Zero)
         {
             long style = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE).ToInt64();
@@ -171,16 +171,20 @@ public class WallpaperWindowService
             NativeMethods.MapWindowPoints(IntPtr.Zero, _desktopParent, ref pt, 1);
         }
 
+        IntPtr insertPos = (_insertAfter != IntPtr.Zero && NativeMethods.IsWindow(_insertAfter))
+            ? _insertAfter
+            : new IntPtr(NativeMethods.HWND_BOTTOM);
+
         NativeMethods.SetWindowPos(
             hWnd,
-            IntPtr.Zero,
+            insertPos,
             pt.X,
             pt.Y,
             width,
             height,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW | NativeMethods.SWP_FRAMECHANGED);
 
-        Log($"Placed window 0x{hWnd.ToInt64():X} at ({pt.X},{pt.Y} {width}x{height}) inside parent 0x{_desktopParent.ToInt64():X}");
+        Log($"Placed window 0x{hWnd.ToInt64():X} at ({pt.X},{pt.Y} {width}x{height}) inside parent 0x{_desktopParent.ToInt64():X} after 0x{insertPos.ToInt64():X}");
 
         EnsureTimerStarted();
     }
@@ -223,9 +227,13 @@ public class WallpaperWindowService
 
                     if (isWin)
                     {
+                        IntPtr pos = (_insertAfter != IntPtr.Zero && NativeMethods.IsWindow(_insertAfter))
+                            ? _insertAfter
+                            : new IntPtr(NativeMethods.HWND_BOTTOM);
+
                         NativeMethods.SetWindowPos(
                             h,
-                            IntPtr.Zero,
+                            pos,
                             0, 0, 0, 0,
                             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
                     }
@@ -237,9 +245,9 @@ public class WallpaperWindowService
                 }
             }
 
-            if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && !NativeMethods.IsWindowVisible(_workerW))
+            if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
             {
-                NativeMethods.ShowWindow(_workerW, NativeMethods.SW_SHOW);
+                NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
             }
         };
         _zOrderTimer.Start();
