@@ -9,6 +9,7 @@ internal static class NativeMethods
     public const uint WM_SPAWN_WORKER = 0x052C;
     public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
+    public const int GWLP_HWNDPARENT = -8;
     public const uint WS_CHILD = 0x40000000;
     public const uint WS_VISIBLE = 0x10000000;
     public const uint WS_CLIPSIBLINGS = 0x04000000;
@@ -34,6 +35,13 @@ internal static class NativeMethods
 
     public const int WM_NCHITTEST = 0x0084;
     public const int HTTRANSPARENT = -1;
+
+    public const int DPI_HOSTING_BEHAVIOR_INVALID = -1;
+    public const int DPI_HOSTING_BEHAVIOR_DEFAULT = 0;
+    public const int DPI_HOSTING_BEHAVIOR_MIXED = 1;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int SetThreadDpiHostingBehavior(int dpiHostingBehavior);
 
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;

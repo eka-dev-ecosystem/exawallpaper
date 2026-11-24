@@ -156,8 +156,7 @@ public partial class App : Application
 
         foreach (var win in _wallpaperWindows)
         {
-            _windowService.DetachWindow(win);
-            win.Close();
+            _windowService.DetachWallpaper(win);
         }
         _wallpaperWindows.Clear();
 
@@ -200,13 +199,10 @@ public partial class App : Application
 
     private void CreateWindowForBounds(int x, int y, int width, int height, string? videoPath)
     {
-        var win = new WallpaperWindow();
+        var win = _windowService.CreateWallpaper(x, y, width, height);
         win.SetMuted(_config.IsMuted);
         win.SetVolume(_config.Volume);
         win.SetStretchMode(_config.StretchMode);
-
-        win.Show();
-        _windowService.AttachToDesktop(win, x, y, width, height);
 
         if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
         {
@@ -354,26 +350,20 @@ public partial class App : Application
     {
         _fullscreenDetector.Stop();
         _powerMonitor.Dispose();
+        foreach (var win in _wallpaperWindows)
+        {
+            _windowService.DetachWallpaper(win);
+        }
+        _wallpaperWindows.Clear();
+
         _windowService?.RestoreDesktop();
 
         if (_notifyIcon != null)
         {
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
+            _notifyIcon = null;
         }
-
-        if (_singleInstanceMutex != null)
-        {
-            try { _singleInstanceMutex.ReleaseMutex(); } catch { }
-            _singleInstanceMutex.Dispose();
-            _singleInstanceMutex = null;
-        }
-
-        foreach (var win in _wallpaperWindows)
-        {
-            win.Close();
-        }
-        _wallpaperWindows.Clear();
 
         Shutdown();
     }

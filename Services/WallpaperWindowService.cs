@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using ExaWallpaper.Models;
+using ExaWallpaper.Views;
 
 namespace ExaWallpaper.Services;
 
@@ -112,6 +113,40 @@ public class WallpaperWindowService
         parentContainer = pContainer != IntPtr.Zero ? pContainer : progman;
         insertAfter = insAfter;
         staticWallpaperWorker = staticWorker;
+    }
+
+    public WallpaperWindow CreateWallpaper(int x, int y, int width, int height)
+    {
+        LocateDesktopLayers(out _desktopParent, out _insertAfter, out _workerW);
+
+        // Hide static wallpaper WorkerW so video wallpaper displays on desktop!
+        if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW))
+        {
+            NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
+            Log($"Static wallpaper WorkerW 0x{_workerW.ToInt64():X} hidden.");
+        }
+
+        var win = new WallpaperWindow(_desktopParent, _insertAfter, x, y, width, height);
+
+        lock (_handleLock)
+        {
+            if (!_attachedHandles.Contains(win.Handle))
+            {
+                _attachedHandles.Add(win.Handle);
+            }
+        }
+
+        EnsureTimerStarted();
+        return win;
+    }
+
+    public void DetachWallpaper(WallpaperWindow win)
+    {
+        lock (_handleLock)
+        {
+            _attachedHandles.Remove(win.Handle);
+        }
+        win.Dispose();
     }
 
     public void AttachToDesktop(Window window, int x, int y, int width, int height)
@@ -245,7 +280,26 @@ public class WallpaperWindowService
                 }
             }
 
-            if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
+            if (_desktopParent != IntPtr.Zero)
+            {
+                IntPtr w = NativeMethods.FindWindowEx(_desktopParent, IntPtr.Zero, "WorkerW", null);
+                if (w != IntPtr.Zero && NativeMethods.IsWindow(w) && NativeMethods.IsWindowVisible(w))
+                {
+                    bool isParentOfAny = false;
+                    lock (_handleLock)
+                    {
+                        foreach (var h in _attachedHandles)
+                        {
+                            if (NativeMethods.GetParent(h) == w) { isParentOfAny = true; break; }
+                        }
+                    }
+                    if (!isParentOfAny)
+                    {
+                        NativeMethods.ShowWindow(w, NativeMethods.SW_HIDE);
+                    }
+                }
+            }
+            else if (_workerW != IntPtr.Zero && NativeMethods.IsWindow(_workerW) && NativeMethods.IsWindowVisible(_workerW))
             {
                 NativeMethods.ShowWindow(_workerW, NativeMethods.SW_HIDE);
             }
