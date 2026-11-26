@@ -20,21 +20,31 @@ public final class WallpaperViewModel {
         self.powerMonitor = PowerMonitorService()
 
         setupListeners()
-        desktopService.configure(with: config)
 
-        var activeVideo = config.videoPath
-        if activeVideo == nil || !FileManager.default.fileExists(atPath: activeVideo!) {
+        if config.videoPath == nil || !FileManager.default.fileExists(atPath: config.videoPath!) {
             if let bundledSample = Bundle.main.path(forResource: "sakurajima_mai_live", ofType: "mp4", inDirectory: "sample-wallpapers") ??
                                    Bundle.main.path(forResource: "gojo_satoru_live", ofType: "mp4", inDirectory: "sample-wallpapers") {
-                activeVideo = bundledSample
+                config.videoPath = bundledSample
             }
         }
 
-        if let path = activeVideo, FileManager.default.fileExists(atPath: path) {
+        desktopService.configure(with: config)
+
+        let activeDisplayPath = effectiveActiveVideoPath(for: config)
+        if let path = activeDisplayPath {
             state.currentVideoPath = path
             state.isPlaying = true
-            desktopService.loadVideo(path: path)
         }
+    }
+
+    private func effectiveActiveVideoPath(for cfg: AppConfig) -> String? {
+        if let path = cfg.videoPath, FileManager.default.fileExists(atPath: path) {
+            return path
+        }
+        if cfg.multiMonitorMode == "PerMonitor" {
+            return cfg.monitorVideos.values.first { FileManager.default.fileExists(atPath: $0) }
+        }
+        return nil
     }
 
     private func setupListeners() {
@@ -87,21 +97,21 @@ public final class WallpaperViewModel {
     public func updateConfig(_ newConfig: AppConfig) {
         let videoChanged = newConfig.videoPath != config.videoPath
         let multiMonitorChanged = newConfig.multiMonitorMode != config.multiMonitorMode
+        let monitorVideosChanged = newConfig.monitorVideos != config.monitorVideos
         let scalingChanged = newConfig.scalingMode != config.scalingMode
 
         self.config = newConfig
         configService.save(newConfig)
 
-        if multiMonitorChanged {
+        if multiMonitorChanged || monitorVideosChanged || videoChanged {
+            state.currentVideoPath = effectiveActiveVideoPath(for: newConfig)
+            state.isPausedByUser = false
             desktopService.configure(with: newConfig)
         } else {
             desktopService.setMuted(newConfig.isMuted)
             desktopService.setVolume(Float(newConfig.volume))
             if scalingChanged {
                 desktopService.setScalingMode(newConfig.scalingMode)
-            }
-            if videoChanged, let path = newConfig.videoPath {
-                selectVideo(path: path)
             }
         }
 

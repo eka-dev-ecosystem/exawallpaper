@@ -4,13 +4,17 @@ import Foundation
 
 final class PlayerHostingView: NSView {
     let playerLayer: AVPlayerLayer
+    private let spanLayerFrame: NSRect?
 
-    init(frame: NSRect, playerLayer: AVPlayerLayer) {
+    init(frame: NSRect, playerLayer: AVPlayerLayer, spanLayerFrame: NSRect? = nil) {
         self.playerLayer = playerLayer
+        self.spanLayerFrame = spanLayerFrame
         super.init(frame: frame)
         self.wantsLayer = true
         self.layer?.backgroundColor = NSColor.black.cgColor
+        self.layer?.masksToBounds = true
         self.layer?.addSublayer(playerLayer)
+        updateLayerFrame()
     }
 
     required init?(coder: NSCoder) {
@@ -19,22 +23,33 @@ final class PlayerHostingView: NSView {
 
     override func layout() {
         super.layout()
+        updateLayerFrame()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        if let scale = window?.backingScaleFactor {
+            playerLayer.contentsScale = scale
+        }
+    }
+
+    private func updateLayerFrame() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        playerLayer.frame = bounds
+        playerLayer.frame = spanLayerFrame ?? bounds
+        if let scale = window?.backingScaleFactor {
+            playerLayer.contentsScale = scale
+        }
         CATransaction.commit()
     }
 }
 
 public final class DesktopWindowService {
-    private struct DisplayInstance {
-        let window: NSWindow
-        let hostingView: PlayerHostingView
-        let playerService: VideoPlayerService
-    }
-
-    private var instances: [DisplayInstance] = []
+    private var windows: [NSWindow] = []
+    private var hostingViews: [PlayerHostingView] = []
+    private var playerServices: [VideoPlayerService] = []
     private var screenObserver: NSObjectProtocol?
+    private var reconfigureWorkItem: DispatchWorkItem?
 
     public init() {
         screenObserver = NotificationCenter.default.addObserver(
@@ -42,11 +57,12 @@ public final class DesktopWindowService {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.reconfigureWindows()
+            self?.scheduleReconfigure()
         }
     }
 
     deinit {
+        reconfigureWorkItem?.cancel()
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -61,26 +77,29 @@ public final class DesktopWindowService {
     }
 
     public func play() {
-        instances.forEach { $0.playerService.play() }
+        playerServices.forEach { $0.play() }
     }
 
     public func pause() {
-        instances.forEach { $0.playerService.pause() }
+        playerServices.forEach { $0.pause() }
     }
 
     public func setMuted(_ isMuted: Bool) {
-        instances.forEach { $0.playerService.setMuted(isMuted) }
+        playerServices.forEach { $0.setMuted(isMuted) }
     }
 
     public func setVolume(_ volume: Float) {
-        instances.forEach { $0.playerService.setVolume(volume) }
+        playerServices.forEach { $0.setVolume(volume) }
     }
 
     public func setScalingMode(_ mode: String) {
-        instances.forEach { $0.playerService.setScalingMode(mode) }
+        playerServices.forEach { $0.setScalingMode(mode) }
     }
 
-    private func resolveURL(from path: String) -> URL? {
+    private func resolveURL(from path: String?) -> URL? {
+        guard let path = path, !path.isEmpty, FileManager.default.fileExists(atPath: path) else {
+            return nil
+        }
         if path.hasPrefix("file://") {
             return URL(string: path)
         }
@@ -92,6 +111,16 @@ public final class DesktopWindowService {
         reconfigureWindows()
     }
 
+    private func scheduleReconfigure() {
+        reconfigureWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.reconfigureWindows()
+        }
+        reconfigureWorkItem = item
+        // Briefly coalesce rapid display-change bursts while monitors settle.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: item)
+    }
+
     private func reconfigureWindows() {
         cleanup()
 
@@ -100,90 +129,91 @@ public final class DesktopWindowService {
 
         switch currentConfig.multiMonitorMode {
         case "Span":
-            // "ke 3 monitor jadi satu" - Span single window across bounding frame of all screens
-            var unionFrame = screens[0].frame
-            for s in screens.dropFirst() {
-                unionFrame = unionFrame.union(s.frame)
-            }
-            let targetScreen = NSScreen.main ?? screens[0]
-            let instance = createDesktopWindow(frame: unionFrame, screen: targetScreen)
-            instances.append(instance)
+            // Render a synchronized video sliced across each screen's window so
+            // spanning works even with "Displays have separate Spaces" and mixed DPI.
+            let unionFrame = screens.dropFirst().reduce(screens[0].frame) { $0.union($1.frame) }
+            let sharedService = VideoPlayerService()
+            playerServices.append(sharedService)
 
-            if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path),
-               let url = resolveURL(from: path) {
-                instance.playerService.loadVideo(
-                    url: url,
-                    isMuted: currentConfig.isMuted,
-                    volume: Float(currentConfig.volume),
-                    scalingMode: currentConfig.scalingMode
+            for (index, screen) in screens.enumerated() {
+                let layer = index == 0 ? sharedService.playerLayer : sharedService.makeLayer()
+                let spanLayerFrame = NSRect(
+                    x: unionFrame.minX - screen.frame.minX,
+                    y: unionFrame.minY - screen.frame.minY,
+                    width: unionFrame.width,
+                    height: unionFrame.height
                 )
+                createDesktopWindow(for: screen, playerLayer: layer, spanLayerFrame: spanLayerFrame)
             }
+
+            loadVideo(on: sharedService, url: resolveURL(from: currentConfig.videoPath))
 
         case "PerMonitor":
-            // "setiap monitor bisa beda beda" - Separate windows playing monitor-specific videos
             for (index, screen) in screens.enumerated() {
-                let instance = createDesktopWindow(frame: screen.frame, screen: screen)
-                instances.append(instance)
+                let service = VideoPlayerService()
+                playerServices.append(service)
+                createDesktopWindow(for: screen, playerLayer: service.playerLayer)
 
-                let selectedPath = currentConfig.monitorVideos[String(index)] ?? currentConfig.videoPath
-                if let path = selectedPath, FileManager.default.fileExists(atPath: path),
-                   let url = resolveURL(from: path) {
-                    instance.playerService.loadVideo(
-                        url: url,
-                        isMuted: currentConfig.isMuted,
-                        volume: Float(currentConfig.volume),
-                        scalingMode: currentConfig.scalingMode
-                    )
-                }
+                let customURL = resolveURL(from: currentConfig.monitorVideos[String(index)])
+                let targetURL = customURL ?? resolveURL(from: currentConfig.videoPath)
+                loadVideo(on: service, url: targetURL)
             }
 
         case "PrimaryOnly":
-            let screen = NSScreen.main ?? screens[0]
-            let instance = createDesktopWindow(frame: screen.frame, screen: screen)
-            instances.append(instance)
-
-            if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path),
-               let url = resolveURL(from: path) {
-                instance.playerService.loadVideo(
-                    url: url,
-                    isMuted: currentConfig.isMuted,
-                    volume: Float(currentConfig.volume),
-                    scalingMode: currentConfig.scalingMode
-                )
-            }
+            // NSScreen.screens[0] is always the primary display (menu bar display at (0,0)),
+            // whereas NSScreen.main tracks whichever screen currently holds key focus.
+            let primaryScreen = screens[0]
+            let service = VideoPlayerService()
+            playerServices.append(service)
+            createDesktopWindow(for: primaryScreen, playerLayer: service.playerLayer)
+            loadVideo(on: service, url: resolveURL(from: currentConfig.videoPath))
 
         default: // "Duplicate" or legacy "AllDisplays"
-            for screen in screens {
-                let instance = createDesktopWindow(frame: screen.frame, screen: screen)
-                instances.append(instance)
+            let sharedService = VideoPlayerService()
+            playerServices.append(sharedService)
 
-                if let path = currentConfig.videoPath, FileManager.default.fileExists(atPath: path),
-                   let url = resolveURL(from: path) {
-                    instance.playerService.loadVideo(
-                        url: url,
-                        isMuted: currentConfig.isMuted,
-                        volume: Float(currentConfig.volume),
-                        scalingMode: currentConfig.scalingMode
-                    )
-                }
+            for (index, screen) in screens.enumerated() {
+                let layer = index == 0 ? sharedService.playerLayer : sharedService.makeLayer()
+                createDesktopWindow(for: screen, playerLayer: layer)
             }
+
+            loadVideo(on: sharedService, url: resolveURL(from: currentConfig.videoPath))
         }
     }
 
-    private func createDesktopWindow(frame: NSRect, screen: NSScreen) -> DisplayInstance {
+    private func loadVideo(on service: VideoPlayerService, url: URL?) {
+        guard let url = url else { return }
+        service.loadVideo(
+            url: url,
+            isMuted: currentConfig.isMuted,
+            volume: Float(currentConfig.volume),
+            scalingMode: currentConfig.scalingMode
+        )
+    }
+
+    private func createDesktopWindow(
+        for screen: NSScreen,
+        playerLayer: AVPlayerLayer,
+        spanLayerFrame: NSRect? = nil
+    ) {
+        let frame = screen.frame
+        // NSWindow(contentRect:..., screen:) treats contentRect as relative to screen.frame.origin.
+        // Passing origin .zero prevents double-offsetting secondary monitors, and setFrame guarantees exact global bounds.
         let window = NSWindow(
-            contentRect: frame,
+            contentRect: NSRect(origin: .zero, size: frame.size),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false,
             screen: screen
         )
+        window.setFrame(frame, display: false)
+        window.hasShadow = false
 
         // Position window directly at the desktop level behind desktop icons
         window.level = NSWindow.Level(Int(CGWindowLevelForKey(.desktopWindow)))
         window.canHide = false
         window.hidesOnDeactivate = false
-        window.isOpaque = false
+        window.isOpaque = true
         window.backgroundColor = .black
 
         // Crucial for native desktop: click through to desktop icons
@@ -192,20 +222,29 @@ public final class DesktopWindowService {
         // Stay on all virtual desktops / spaces and ignore window cycling
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
-        let playerService = VideoPlayerService()
-        let hostingView = PlayerHostingView(frame: NSRect(origin: .zero, size: frame.size), playerLayer: playerService.playerLayer)
+        let hostingView = PlayerHostingView(
+            frame: NSRect(origin: .zero, size: frame.size),
+            playerLayer: playerLayer,
+            spanLayerFrame: spanLayerFrame
+        )
         window.contentView = hostingView
 
         window.orderFront(nil)
 
-        return DisplayInstance(window: window, hostingView: hostingView, playerService: playerService)
+        windows.append(window)
+        hostingViews.append(hostingView)
     }
 
     public func cleanup() {
-        for instance in instances {
-            instance.playerService.pause()
-            instance.window.orderOut(nil)
+        for service in playerServices {
+            service.dispose()
         }
-        instances.removeAll()
+        playerServices.removeAll()
+
+        for window in windows {
+            window.orderOut(nil)
+        }
+        windows.removeAll()
+        hostingViews.removeAll()
     }
 }

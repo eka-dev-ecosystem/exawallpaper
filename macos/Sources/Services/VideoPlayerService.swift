@@ -4,6 +4,9 @@ import AVFoundation
 public final class VideoPlayerService {
     private var queuePlayer: AVQueuePlayer?
     private var playerLooper: AVPlayerLooper?
+    private var managedLayers: [AVPlayerLayer] = []
+    private var currentVideoGravity: AVLayerVideoGravity = .resizeAspectFill
+
     public let playerLayer = AVPlayerLayer()
 
     public var isPlaying: Bool {
@@ -11,16 +14,25 @@ public final class VideoPlayerService {
     }
 
     public init() {
-        playerLayer.videoGravity = .resizeAspectFill
-        playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        playerLayer.videoGravity = currentVideoGravity
         playerLayer.drawsAsynchronously = true
+        managedLayers.append(playerLayer)
+    }
+
+    deinit {
+        dispose()
+    }
+
+    public func makeLayer() -> AVPlayerLayer {
+        let layer = AVPlayerLayer(player: queuePlayer)
+        layer.videoGravity = currentVideoGravity
+        layer.drawsAsynchronously = true
+        managedLayers.append(layer)
+        return layer
     }
 
     public func loadVideo(url: URL, isMuted: Bool, volume: Float, scalingMode: String) {
-        playerLooper?.disableLooping()
-        playerLooper = nil
-        queuePlayer?.pause()
-        queuePlayer?.removeAllItems()
+        disposePlayerOnly()
 
         let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
@@ -31,15 +43,32 @@ public final class VideoPlayerService {
         player.actionAtItemEnd = .none
 
         self.playerLooper = AVPlayerLooper(player: player, templateItem: playerItem)
-
         self.queuePlayer = player
-        self.playerLayer.player = player
+        for layer in managedLayers {
+            layer.player = player
+        }
 
         setScalingMode(scalingMode)
         setMuted(isMuted)
         setVolume(volume)
 
         player.play()
+    }
+
+    public func dispose() {
+        disposePlayerOnly()
+        managedLayers.removeAll()
+    }
+
+    private func disposePlayerOnly() {
+        playerLooper?.disableLooping()
+        playerLooper = nil
+        queuePlayer?.pause()
+        queuePlayer?.removeAllItems()
+        queuePlayer = nil
+        for layer in managedLayers {
+            layer.player = nil
+        }
     }
 
     public func play() {
@@ -59,13 +88,18 @@ public final class VideoPlayerService {
     }
 
     public func setScalingMode(_ mode: String) {
+        let gravity: AVLayerVideoGravity
         switch mode {
         case "AspectFit":
-            playerLayer.videoGravity = .resizeAspect
+            gravity = .resizeAspect
         case "Stretch":
-            playerLayer.videoGravity = .resize
+            gravity = .resize
         default:
-            playerLayer.videoGravity = .resizeAspectFill
+            gravity = .resizeAspectFill
+        }
+        currentVideoGravity = gravity
+        for layer in managedLayers {
+            layer.videoGravity = gravity
         }
     }
 }

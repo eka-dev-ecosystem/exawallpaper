@@ -79,7 +79,7 @@ public struct SettingsView: View {
                     GroupBox(label: Label("Multi-Monitor Display Setup", systemImage: "display.2")) {
                         VStack(alignment: .leading, spacing: 10) {
                             Picker("Display Mode:", selection: $multiMonitorMode) {
-                                Text("Span All Displays (3 Monitor Jadi Satu)").tag("Span")
+                                Text("Span All Displays (Semua Monitor Jadi Satu)").tag("Span")
                                 Text("Different Video Per Monitor (Tiap Monitor Beda)").tag("PerMonitor")
                                 Text("Duplicate on All Displays (Semua Monitor Sama)").tag("Duplicate")
                                 Text("Primary Display Only").tag("PrimaryOnly")
@@ -95,29 +95,40 @@ public struct SettingsView: View {
                                 ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in
                                     let key = String(index)
                                     let path = monitorVideos[key] ?? ""
-                                    HStack {
-                                        Text("Monitor \(index + 1) (\(Int(screen.frame.width))x\(Int(screen.frame.height))):")
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Monitor \(index + 1): \(screen.localizedName)\(index == 0 ? " (Primary)" : "") (\(Int(screen.frame.width))x\(Int(screen.frame.height)))")
                                             .font(.caption)
-                                            .frame(width: 140, alignment: .leading)
+                                            .foregroundColor(.secondary)
 
-                                        Text(path.isEmpty ? (videoPath.isEmpty ? "Using default" : (videoPath as NSString).lastPathComponent) : (path as NSString).lastPathComponent)
-                                            .font(.caption)
-                                            .lineLimit(1)
-                                            .truncationMode(.middle)
-                                            .foregroundColor(path.isEmpty ? .secondary : .primary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(4)
-                                            .background(Color(NSColor.textBackgroundColor))
-                                            .cornerRadius(4)
+                                        HStack {
+                                            Text(path.isEmpty ? (videoPath.isEmpty ? "Using default" : (videoPath as NSString).lastPathComponent) : (path as NSString).lastPathComponent)
+                                                .font(.caption)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                                .foregroundColor(path.isEmpty ? .secondary : .primary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(4)
+                                                .background(Color(NSColor.textBackgroundColor))
+                                                .cornerRadius(4)
 
-                                        Button("Browse...") {
-                                            chooseVideoFile { selected in
-                                                monitorVideos[key] = selected
+                                            if !path.isEmpty {
+                                                Button("Reset") {
+                                                    monitorVideos.removeValue(forKey: key)
+                                                }
+                                                .buttonStyle(.bordered)
+                                                .controlSize(.small)
                                             }
+
+                                            Button("Browse...") {
+                                                chooseVideoFile { selected in
+                                                    monitorVideos[key] = selected
+                                                }
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
                                         }
-                                        .buttonStyle(.bordered)
-                                        .controlSize(.small)
                                     }
+                                    .padding(.vertical, 2)
                                 }
                             }
                         }
