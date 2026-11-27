@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.exa.ExaWallpaper</string>
+    <string>com.exa.exawallpaper</string>
     <key>CFBundleName</key>
     <string>ExaWallpaper</string>
     <key>CFBundleDisplayName</key>

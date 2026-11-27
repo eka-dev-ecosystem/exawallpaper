@@ -21,8 +21,25 @@ public class WallpaperWindow : IDisposable
     private string? _currentVideoPath;
     private bool _isInitialized;
     private bool _isDisposed;
+    private IntPtr _cachedHandle;
 
-    public IntPtr Handle => _form.Handle;
+    public IntPtr Handle =>
+        (!_isDisposed && !_form.IsDisposed && !_form.Disposing && _form.IsHandleCreated)
+            ? _form.Handle
+            : IntPtr.Zero;
+
+    internal IntPtr LastKnownHandle => _cachedHandle;
+
+    public bool IsAlive =>
+        !_isDisposed &&
+        !_form.IsDisposed &&
+        !_form.Disposing &&
+        _form.IsHandleCreated &&
+        _cachedHandle != IntPtr.Zero &&
+        NativeMethods.IsWindow(_cachedHandle);
+
+    private CoreWebView2? SafeCoreWebView =>
+        (!_isDisposed && !_form.IsDisposed && !_webView.IsDisposed) ? _webView.CoreWebView2 : null;
 
     private static void Log(string message)
     {
@@ -39,6 +56,25 @@ public class WallpaperWindow : IDisposable
 
     private class TransparentForm : Form
     {
+        public TransparentForm()
+        {
+            SetStyle(ControlStyles.Selectable, false);
+            TabStop = false;
+        }
+
+        protected override bool ShowWithoutActivation => true;
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= (int)(NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TRANSPARENT);
+                cp.ExStyle &= ~(int)(NativeMethods.WS_EX_APPWINDOW | NativeMethods.WS_EX_CONTROLPARENT);
+                return cp;
+            }
+        }
+
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == NativeMethods.WM_NCHITTEST)
@@ -50,6 +86,26 @@ public class WallpaperWindow : IDisposable
             {
                 m.Result = (IntPtr)NativeMethods.MA_NOACTIVATE;
                 return;
+            }
+            if (m.Msg == NativeMethods.WM_ACTIVATE && (m.WParam.ToInt64() & 0xFFFF) != 0)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == NativeMethods.WM_SETFOCUS)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == NativeMethods.WM_NCACTIVATE && m.WParam != IntPtr.Zero)
+            {
+                m.WParam = IntPtr.Zero;
+            }
+            if (m.Msg == NativeMethods.WM_WINDOWPOSCHANGING && m.LParam != IntPtr.Zero)
+            {
+                var pos = Marshal.PtrToStructure<NativeMethods.WINDOWPOS>(m.LParam);
+                pos.flags |= NativeMethods.SWP_NOACTIVATE;
+                Marshal.StructureToPtr(pos, m.LParam, false);
             }
             base.WndProc(ref m);
         }
@@ -66,23 +122,42 @@ public class WallpaperWindow : IDisposable
             Location = new Point(x, y),
             Size = new Size(width, height),
             ShowInTaskbar = false,
+            ControlBox = false,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            Text = string.Empty,
             BackColor = Color.Black
         };
 
-        _form.Show();
+        // Create native HWND in hidden state first so it NEVER appears as a floating top-level window in Alt+Tab
         IntPtr hWnd = _form.Handle;
+        _cachedHandle = hWnd;
+        _form.Disposed += (s, e) => _isDisposed = true;
+
+        _webView = new WebView2
+        {
+            Dock = DockStyle.Fill,
+            DefaultBackgroundColor = Color.Black,
+            TabStop = false
+        };
+        _form.Controls.Add(_webView);
 
         if (parentHwnd != IntPtr.Zero && NativeMethods.IsWindow(parentHwnd))
         {
             try { NativeMethods.SetThreadDpiHostingBehavior(NativeMethods.DPI_HOSTING_BEHAVIOR_MIXED); } catch { }
 
-            // 1. Change style to WS_CHILD
+            // 1. Convert style to child BEFORE showing so Shell/Alt+Tab never registers it as a top-level app window
             long style = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE).ToInt64();
-            style &= ~NativeMethods.WS_POPUP;
-            style |= (NativeMethods.WS_CHILD | NativeMethods.WS_VISIBLE | NativeMethods.WS_CLIPSIBLINGS);
+            style &= ~(long)(NativeMethods.WS_POPUP | NativeMethods.WS_VISIBLE);
+            style |= (NativeMethods.WS_CHILD | NativeMethods.WS_CLIPSIBLINGS);
             NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_STYLE, new IntPtr(style));
 
-            // 2. SetParent to desktop container (Progman on Win11, WorkerW on Win10)
+            long exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt64();
+            exStyle |= (NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TRANSPARENT);
+            exStyle &= ~(long)(NativeMethods.WS_EX_APPWINDOW | NativeMethods.WS_EX_CONTROLPARENT | NativeMethods.WS_EX_LAYERED);
+            NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, new IntPtr(exStyle));
+
+            // 2. SetParent to desktop container (Progman on Win11, WorkerW on Win10) while still hidden
             IntPtr prevParent = NativeMethods.SetParent(hWnd, parentHwnd);
             int err = Marshal.GetLastWin32Error();
             Log($"SetParent(0x{hWnd.ToInt64():X}, 0x{parentHwnd.ToInt64():X}) -> prev=0x{prevParent.ToInt64():X}, Error={err}, CurrentParent=0x{NativeMethods.GetParent(hWnd).ToInt64():X}");
@@ -95,22 +170,28 @@ public class WallpaperWindow : IDisposable
                 ? insertAfterHwnd
                 : new IntPtr(NativeMethods.HWND_BOTTOM);
 
+            // 4. Show inside desktop container without activation, strictly behind SHELLDLL_DefView
             NativeMethods.SetWindowPos(
                 hWnd,
                 insertPos,
                 pt.X, pt.Y, width, height,
-                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW | NativeMethods.SWP_FRAMECHANGED);
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_FRAMECHANGED);
+
+            _form.Show();
+
+            NativeMethods.SetWindowPos(
+                hWnd,
+                insertPos,
+                pt.X, pt.Y, width, height,
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
 
             Log($"Form 0x{hWnd.ToInt64():X} successfully reparented to 0x{parentHwnd.ToInt64():X} behind 0x{insertPos.ToInt64():X} at ({pt.X},{pt.Y} {width}x{height})");
         }
-
-        _webView = new WebView2
+        else
         {
-            Dock = DockStyle.Fill,
-            DefaultBackgroundColor = Color.Black
-        };
+            Log("Desktop parent container not available; keeping WallpaperWindow hidden to avoid floating window.");
+        }
 
-        _form.Controls.Add(_webView);
         _ = InitializeWebViewAsync();
     }
 
@@ -122,13 +203,19 @@ public class WallpaperWindow : IDisposable
             string userDataDir = Path.Combine(appData, "ExaWallpaper", "WebView2Data");
             Directory.CreateDirectory(userDataDir);
 
-            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataDir);
+            var options = new CoreWebView2EnvironmentOptions(
+                "--disable-background-timer-throttling --disable-features=CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required");
+            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataDir, options: options);
+            if (_isDisposed || _form.IsDisposed || _webView.IsDisposed) return;
+
             await _webView.EnsureCoreWebView2Async(env);
+            if (_isDisposed || _form.IsDisposed || _webView.IsDisposed) return;
 
             _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             _webView.CoreWebView2.Settings.IsZoomControlEnabled = false;
+            _webView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
 
             _webView.CoreWebView2.WebMessageReceived += (s, e) =>
             {
@@ -143,6 +230,10 @@ public class WallpaperWindow : IDisposable
                 NavigateVideo();
             }
         }
+        catch (ObjectDisposedException)
+        {
+            Log("InitializeWebViewAsync aborted because WallpaperWindow was already disposed.");
+        }
         catch (Exception ex)
         {
             Log($"InitializeWebViewAsync exception: {ex.Message}");
@@ -151,6 +242,7 @@ public class WallpaperWindow : IDisposable
 
     public void LoadVideo(string filePath)
     {
+        if (_isDisposed || _form.IsDisposed) return;
         Log($"LoadVideo: '{filePath}'");
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
         {
@@ -168,14 +260,15 @@ public class WallpaperWindow : IDisposable
 
     private void NavigateVideo()
     {
-        if (string.IsNullOrEmpty(_currentVideoPath) || _webView.CoreWebView2 == null) return;
+        var core = SafeCoreWebView;
+        if (string.IsNullOrEmpty(_currentVideoPath) || core == null) return;
 
         string folder = Path.GetDirectoryName(_currentVideoPath) ?? "";
         string fileName = Path.GetFileName(_currentVideoPath);
 
         try
         {
-            _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+            core.SetVirtualHostNameToFolderMapping(
                 "wallpaper.assets",
                 folder,
                 CoreWebView2HostResourceAccessKind.Allow);
@@ -237,46 +330,51 @@ public class WallpaperWindow : IDisposable
 
     public void Play()
     {
-        if (_webView.CoreWebView2 != null)
+        var core = SafeCoreWebView;
+        if (core != null)
         {
-            try { _webView.CoreWebView2.ExecuteScriptAsync("document.getElementById('bgvid')?.play();"); } catch { }
+            try { core.ExecuteScriptAsync("document.getElementById('bgvid')?.play();"); } catch { }
         }
     }
 
     public void Pause()
     {
-        if (_webView.CoreWebView2 != null)
+        var core = SafeCoreWebView;
+        if (core != null)
         {
-            try { _webView.CoreWebView2.ExecuteScriptAsync("document.getElementById('bgvid')?.pause();"); } catch { }
+            try { core.ExecuteScriptAsync("document.getElementById('bgvid')?.pause();"); } catch { }
         }
     }
 
     public void SetMuted(bool isMuted)
     {
         _isMuted = isMuted;
-        if (_webView.CoreWebView2 != null)
+        var core = SafeCoreWebView;
+        if (core != null)
         {
-            try { _webView.CoreWebView2.ExecuteScriptAsync($"var v=document.getElementById('bgvid'); if(v) v.muted = {isMuted.ToString().ToLower()};"); } catch { }
+            try { core.ExecuteScriptAsync($"var v=document.getElementById('bgvid'); if(v) v.muted = {isMuted.ToString().ToLower()};"); } catch { }
         }
     }
 
     public void SetVolume(double volume)
     {
         _volume = Math.Clamp(volume, 0.0, 1.0);
-        if (_webView.CoreWebView2 != null)
+        var core = SafeCoreWebView;
+        if (core != null)
         {
             string vol = _volume.ToString("0.00", CultureInfo.InvariantCulture);
-            try { _webView.CoreWebView2.ExecuteScriptAsync($"var v=document.getElementById('bgvid'); if(v) v.volume = {vol};"); } catch { }
+            try { core.ExecuteScriptAsync($"var v=document.getElementById('bgvid'); if(v) v.volume = {vol};"); } catch { }
         }
     }
 
     public void SetStretchMode(string mode)
     {
         _stretchMode = mode;
-        if (_webView.CoreWebView2 != null)
+        var core = SafeCoreWebView;
+        if (core != null)
         {
             string fit = mode switch { "Uniform" => "contain", "Fill" => "fill", _ => "cover" };
-            try { _webView.CoreWebView2.ExecuteScriptAsync($"var v=document.getElementById('bgvid'); if(v) v.style.objectFit = '{fit}';"); } catch { }
+            try { core.ExecuteScriptAsync($"var v=document.getElementById('bgvid'); if(v) v.style.objectFit = '{fit}';"); } catch { }
         }
     }
 
@@ -287,16 +385,28 @@ public class WallpaperWindow : IDisposable
 
     public void Dispose()
     {
-        if (_isDisposed) return;
+        if (_isDisposed && _form.IsDisposed && _webView.IsDisposed) return;
         _isDisposed = true;
 
-        Log($"Disposing WallpaperWindow 0x{Handle.ToInt64():X}");
+        Log($"Disposing WallpaperWindow 0x{_cachedHandle.ToInt64():X}");
 
         try
         {
-            _webView.Dispose();
-            _form.Close();
-            _form.Dispose();
+            if (!_webView.IsDisposed)
+            {
+                _webView.Dispose();
+            }
+            if (!_form.IsDisposed && !_form.Disposing)
+            {
+                if (_form.IsHandleCreated && _cachedHandle != IntPtr.Zero && NativeMethods.IsWindow(_cachedHandle))
+                {
+                    _form.Close();
+                }
+                if (!_form.IsDisposed)
+                {
+                    _form.Dispose();
+                }
+            }
         }
         catch { }
     }

@@ -18,6 +18,8 @@ internal static class NativeMethods
     public const uint WS_EX_NOACTIVATE = 0x08000000;
     public const uint WS_EX_TRANSPARENT = 0x00000020;
     public const uint WS_EX_LAYERED = 0x00080000;
+    public const uint WS_EX_APPWINDOW = 0x00040000;
+    public const uint WS_EX_CONTROLPARENT = 0x00010000;
 
     public const uint LWA_COLORKEY = 0x00000001;
     public const uint LWA_ALPHA = 0x00000002;
@@ -28,8 +30,12 @@ internal static class NativeMethods
 
     public const int SW_HIDE = 0;
     public const int SW_SHOW = 5;
+    public const int SW_SHOWNOACTIVATE = 4;
 
+    public const int WM_ACTIVATE = 0x0006;
+    public const int WM_SETFOCUS = 0x0007;
     public const int WM_WINDOWPOSCHANGING = 0x0046;
+    public const int WM_NCACTIVATE = 0x0086;
     public const int WM_MOUSEACTIVATE = 0x0021;
     public const int MA_NOACTIVATE = 3;
 

@@ -68,7 +68,7 @@ public struct SettingsView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                             }
-                            Text("Supported formats: MP4 (H.264/HEVC), MOV, WebM")
+                            Text("Supported formats: MP4 (H.264/HEVC), MOV")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

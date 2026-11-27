@@ -26,6 +26,7 @@ public partial class App : Application
 
     private AppConfig _config = null!;
     private readonly WallpaperState _state = new();
+    private DateTime _lastRecoveryUtc = DateTime.MinValue;
 
     private ToolStripMenuItem? _playPauseMenuItem;
     private ToolStripMenuItem? _muteMenuItem;
@@ -220,15 +221,35 @@ public partial class App : Application
             Text = "ExaWallpaper"
         };
 
-        string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "app.ico");
-        if (File.Exists(iconPath))
+        Icon? trayIcon = null;
+        try
         {
-            _notifyIcon.Icon = new Icon(iconPath);
+            var resourceInfo = GetResourceStream(new Uri("pack://application:,,,/Resources/app.ico"));
+            if (resourceInfo?.Stream != null)
+            {
+                using var stream = resourceInfo.Stream;
+                trayIcon = new Icon(stream, SystemInformation.SmallIconSize);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            _notifyIcon.Icon = SystemIcons.Application;
+            Log($"Failed to load embedded tray icon: {ex.Message}");
         }
+
+        if (trayIcon == null)
+        {
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "app.ico");
+            if (File.Exists(iconPath))
+            {
+                trayIcon = new Icon(iconPath, SystemInformation.SmallIconSize);
+            }
+            else if (!string.IsNullOrEmpty(Environment.ProcessPath) && File.Exists(Environment.ProcessPath))
+            {
+                trayIcon = Icon.ExtractAssociatedIcon(Environment.ProcessPath);
+            }
+        }
+
+        _notifyIcon.Icon = trayIcon ?? SystemIcons.Application;
 
         var contextMenu = new ContextMenuStrip();
 
@@ -274,6 +295,35 @@ public partial class App : Application
         {
             Dispatcher.Invoke(ReconfigureWallpaperWindows);
         };
+
+        // Recover automatically if Explorer/Progman restarts and destroys wallpaper HWNDs
+        _windowService.WallpaperHandlesLost += () =>
+        {
+            Dispatcher.BeginInvoke(RecoverLostWallpaperWindows);
+        };
+    }
+
+    private void RecoverLostWallpaperWindows()
+    {
+        if (_wallpaperWindows.Count == 0) return;
+
+        bool anyDead = false;
+        foreach (var win in _wallpaperWindows)
+        {
+            if (!win.IsAlive)
+            {
+                anyDead = true;
+                break;
+            }
+        }
+        if (!anyDead) return;
+
+        if ((DateTime.UtcNow - _lastRecoveryUtc).TotalSeconds < 3) return;
+        if (_windowService.FindProgman() == IntPtr.Zero) return;
+
+        _lastRecoveryUtc = DateTime.UtcNow;
+        Log("RecoverLostWallpaperWindows: recreating wallpaper window(s) after desktop layer reset.");
+        ReconfigureWallpaperWindows();
     }
 
     private void EvaluatePlayback()

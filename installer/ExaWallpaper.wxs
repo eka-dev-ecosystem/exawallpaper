@@ -50,6 +50,8 @@
                       Source="$(var.SourceDir)\sample-wallpapers\yae_miko_live.mp4" />
                 <File Id="SakurajimaMaiMP4"
                       Source="$(var.SourceDir)\sample-wallpapers\sakurajima_mai_live.mp4" />
+                <File Id="ExaPurpleMP4"
+                      Source="$(var.SourceDir)\sample-wallpapers\exa_purple_live.mp4" />
             </Component>
         </DirectoryRef>
 

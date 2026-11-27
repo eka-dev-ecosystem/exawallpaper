@@ -20,6 +20,9 @@ public class WallpaperWindowService
     private IntPtr _insertAfter = IntPtr.Zero;
     private IntPtr _workerW = IntPtr.Zero;
     private DispatcherTimer? _zOrderTimer;
+    private bool _recoveryPending;
+
+    public event Action? WallpaperHandlesLost;
 
     private static void Log(string message)
     {
@@ -117,6 +120,7 @@ public class WallpaperWindowService
 
     public WallpaperWindow CreateWallpaper(int x, int y, int width, int height)
     {
+        _recoveryPending = false;
         LocateDesktopLayers(out _desktopParent, out _insertAfter, out _workerW);
 
         // Hide static wallpaper WorkerW so video wallpaper displays on desktop!
@@ -142,9 +146,15 @@ public class WallpaperWindowService
 
     public void DetachWallpaper(WallpaperWindow win)
     {
-        lock (_handleLock)
+        if (win == null) return;
+
+        IntPtr h = win.Handle != IntPtr.Zero ? win.Handle : win.LastKnownHandle;
+        if (h != IntPtr.Zero)
         {
-            _attachedHandles.Remove(win.Handle);
+            lock (_handleLock)
+            {
+                _attachedHandles.Remove(h);
+            }
         }
         win.Dispose();
     }
@@ -253,14 +263,18 @@ public class WallpaperWindowService
         };
         _zOrderTimer.Tick += (s, e) =>
         {
+            bool lostHandle = false;
             lock (_handleLock)
             {
                 for (int i = _attachedHandles.Count - 1; i >= 0; i--)
                 {
                     IntPtr h = _attachedHandles[i];
                     bool isWin = h != IntPtr.Zero && NativeMethods.IsWindow(h);
+                    bool isParentValid = _desktopParent != IntPtr.Zero &&
+                                         NativeMethods.IsWindow(_desktopParent) &&
+                                         NativeMethods.GetParent(h) == _desktopParent;
 
-                    if (isWin)
+                    if (isWin && isParentValid)
                     {
                         IntPtr pos = (_insertAfter != IntPtr.Zero && NativeMethods.IsWindow(_insertAfter))
                             ? _insertAfter
@@ -274,10 +288,25 @@ public class WallpaperWindowService
                     }
                     else
                     {
-                        Log($"_zOrderTimer removing invalid handle 0x{h.ToInt64():X}");
+                        Log($"_zOrderTimer removing invalid/detached handle 0x{h.ToInt64():X} (isWin={isWin}, isParentValid={isParentValid})");
                         _attachedHandles.RemoveAt(i);
+                        lostHandle = true;
                     }
                 }
+            }
+
+            if (lostHandle)
+            {
+                _recoveryPending = true;
+                Log("Detected lost wallpaper window handle(s); requesting recovery.");
+                WallpaperHandlesLost?.Invoke();
+                return;
+            }
+
+            if (_recoveryPending)
+            {
+                WallpaperHandlesLost?.Invoke();
+                return;
             }
 
             if (_desktopParent != IntPtr.Zero)
@@ -327,6 +356,7 @@ public class WallpaperWindowService
     public void RestoreDesktop()
     {
         Log("RestoreDesktop called.");
+        _recoveryPending = false;
         _zOrderTimer?.Stop();
         _zOrderTimer = null;
 
